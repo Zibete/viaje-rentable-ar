@@ -19,6 +19,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.zibete.driverassistant.calculator.DriverDecision
@@ -32,6 +33,21 @@ fun MainScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
+    MainScreenContent(
+        uiState = uiState,
+        onStartService = viewModel::startServicePlaceholder,
+        onStopService = viewModel::stopServicePlaceholder,
+        onRunSimulatedDecision = viewModel::runSimulatedTripDecision
+    )
+}
+
+@Composable
+fun MainScreenContent(
+    uiState: MainUiState,
+    onStartService: () -> Unit,
+    onStopService: () -> Unit,
+    onRunSimulatedDecision: () -> Unit
+) {
     Surface(
         modifier = Modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.background
@@ -73,13 +89,13 @@ fun MainScreen(
             ) {
                 Button(
                     modifier = Modifier.weight(1f),
-                    onClick = viewModel::startServicePlaceholder
+                    onClick = onStartService
                 ) {
                     Text("Iniciar")
                 }
                 OutlinedButton(
                     modifier = Modifier.weight(1f),
-                    onClick = viewModel::stopServicePlaceholder
+                    onClick = onStopService
                 ) {
                     Text("Detener")
                 }
@@ -87,7 +103,7 @@ fun MainScreen(
 
             Button(
                 modifier = Modifier.fillMaxWidth(),
-                onClick = viewModel::runSimulatedTripDecision
+                onClick = onRunSimulatedDecision
             ) {
                 Text("Probar cálculo simulado")
             }
@@ -181,4 +197,35 @@ private fun Double?.toDisplayMoney(): String {
 
 private fun Double?.toDisplayNumber(): String {
     return this?.let { "%.1f".format(it) } ?: "-"
+}
+
+@Preview(showBackground = true)
+@Composable
+fun MainScreenPreview() {
+    val sampleUiState = MainUiState(
+        overlayPermissionStatus = "Concedido",
+        screenCapturePermissionStatus = "Concedido",
+        serviceStatus = "Ejecutando",
+        lastConfig = DriverConfig.default(),
+        lastDecision = TripDecisionResult(
+            decision = DriverDecision.ACCEPT,
+            fareAmount = 5127.0,
+            arsPerKm = 640.8,
+            arsPerHour = 7502.9,
+            estimatedCost = 3470.0,
+            estimatedNetProfit = 1657.0,
+            totalKm = 8.0,
+            totalMinutes = 41.0,
+            rejectionReasons = emptyList(),
+            reviewReasons = emptyList()
+        )
+    )
+    MaterialTheme {
+        MainScreenContent(
+            uiState = sampleUiState,
+            onStartService = {},
+            onStopService = {},
+            onRunSimulatedDecision = {}
+        )
+    }
 }
