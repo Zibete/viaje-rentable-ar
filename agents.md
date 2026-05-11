@@ -76,9 +76,39 @@ La app SÍ puede:
 - Leer texto visible mediante OCR.
 - Calcular rentabilidad.
 - Mostrar una recomendación visual.
-- Guardar configuración propia.
-- Leer configuración remota propia.
+- Guardar configuración propia local en el dispositivo.
 - Guardar historial propio de análisis.
+- Usar configuración remota propia en una etapa futura, siempre como capa opcional y no como dependencia crítica.
+
+---
+
+## Decisión arquitectónica actual: configuración local primero
+
+La fuente de verdad de configuración para el MVP debe estar en el dispositivo.
+
+Usar:
+
+- `DataStore` para configuración local del conductor.
+- `Room` más adelante para historial de viajes analizados.
+- `Firebase Realtime Database` solo en una etapa futura como override remoto, defaults remotos, backup, feature flags o sincronización.
+
+No usar Firebase como fuente principal en el MVP.
+
+Motivo:
+
+- La app se usará manejando y debe funcionar con mala señal o sin internet.
+- Las reglas de rentabilidad son personales del conductor.
+- La decisión debe ser rápida, local y confiable.
+- Firebase agregaría dependencia externa prematura para un producto privado de uso personal.
+
+Regla obligatoria:
+
+```text
+DataStore = source of truth local.
+Firebase = capa opcional futura.
+```
+
+La app nunca debe romperse ni bloquear el cálculo por no tener internet.
 
 ---
 
@@ -86,22 +116,25 @@ La app SÍ puede:
 
 Usar Android nativo.
 
-Stack recomendado:
+Stack recomendado para el MVP:
 
 - Kotlin.
 - Jetpack Compose.
 - Material 3.
 - MVVM.
-- Hilt para dependency injection.
+- Hilt para dependency injection cuando el proyecto ya esté preparado para DI.
 - Kotlin Coroutines.
 - Flow / StateFlow.
-- Firebase Realtime Database para configuración remota.
-- ML Kit Text Recognition para OCR.
+- DataStore para configuración local persistente.
+- ML Kit Text Recognition para OCR, cuando se implemente captura real.
 - MediaProjection para captura de pantalla autorizada.
 - Foreground Service para mantener análisis activo.
 - SYSTEM_ALERT_WINDOW para overlay flotante.
-- DataStore para configuración local.
-- Room solo cuando se implemente historial persistente.
+
+Stack reservado para etapas posteriores:
+
+- Firebase Realtime Database para defaults remotos, backup o feature flags.
+- Room para historial persistente de viajes.
 
 ---
 
@@ -122,6 +155,7 @@ Ejemplos válidos:
 - `AvoidZoneRule`
 - `TripOfferTextParser`
 - `DriverDecisionOverlayService`
+- `DataStoreDriverConfigRepository`
 
 Evitar nombres genéricos como:
 
@@ -167,7 +201,9 @@ calculator/
 
 ### config
 
-Responsable de obtener configuración local/remota.
+Responsable de obtener y persistir configuración.
+
+Para el MVP, la configuración debe vivir en el dispositivo mediante DataStore.
 
 Archivos esperados:
 
@@ -175,9 +211,13 @@ Archivos esperados:
 config/
   DriverConfig.kt
   DriverConfigRepository.kt
-  FirebaseDriverConfigRepository.kt
-  LocalDriverConfigDataSource.kt
+  DataStoreDriverConfigRepository.kt
+  DriverConfigDataStoreSerializer.kt si se usa Proto DataStore
 ```
+
+Firebase no debe implementarse en el MVP salvo que se pida explícitamente en una rama posterior.
+
+Si en el futuro se agrega Firebase, debe entrar como implementación secundaria, sin desplazar a DataStore como fuente local principal.
 
 ### ocr
 
@@ -255,33 +295,36 @@ data class DriverConfig(
 )
 ```
 
-Config inicial sugerida:
+Config inicial local sugerida:
 
 ```json
 {
-  "driverAssistantConfig": {
-    "minArsPerKm": 600,
-    "minArsPerHour": 7000,
-    "minNetProfit": 1000,
-    "costPerKm": 280,
-    "costPerMinute": 30,
-    "maxPickupKm": 3,
-    "maxPickupMinutes": 10,
-    "reviewTolerancePercent": 10,
-    "rejectIfUnknownFare": true,
-    "rejectIfUnknownDistance": false,
-    "rejectIfAvoidZoneDetected": true,
-    "enabledPlatforms": {
-      "uber": true,
-      "didi": true,
-      "cabify": true
-    },
-    "avoidZones": []
-  }
+  "minArsPerKm": 600,
+  "minArsPerHour": 7000,
+  "minNetProfit": 1000,
+  "costPerKm": 280,
+  "costPerMinute": 30,
+  "maxPickupKm": 3,
+  "maxPickupMinutes": 10,
+  "reviewTolerancePercent": 10,
+  "rejectIfUnknownFare": true,
+  "rejectIfUnknownDistance": false,
+  "rejectIfAvoidZoneDetected": true,
+  "enabledPlatforms": {
+    "uber": true,
+    "didi": true,
+    "cabify": true
+  },
+  "avoidZones": []
 }
 ```
 
-El repositorio de configuración debe tener fallback local si Firebase falla.
+Reglas:
+
+- `DriverConfigRepository` debe exponer configuración como `Flow<DriverConfig>` o suspend functions claras.
+- `DataStoreDriverConfigRepository` debe persistir y leer la configuración local.
+- Debe existir fallback local seguro si DataStore no tiene valores guardados.
+- No ocultar errores críticos de persistencia sin dejar evidencia en logs o estado.
 
 ---
 
@@ -517,7 +560,9 @@ Crear una pantalla inicial con:
 - Botón detener servicio.
 - Botón probar overlay con datos simulados.
 - Última decisión calculada.
-- Última configuración cargada.
+- Configuración local actual.
+
+La edición completa de configuración puede entrar en una rama posterior.
 
 ---
 
@@ -540,21 +585,29 @@ MediaProjection siempre debe iniciarse con consentimiento explícito del usuario
 
 ## Firebase
 
-Usar Firebase Realtime Database solo para configuración remota en el MVP.
+No implementar Firebase en el MVP salvo pedido explícito.
 
-Ruta sugerida:
+Firebase queda documentado como opción futura para:
+
+- Defaults remotos.
+- Feature flags.
+- Backup de configuración.
+- Sincronización entre dispositivos.
+- Kill switch si algún día el producto deja de ser solo personal.
+
+Si se implementa en el futuro:
+
+- No debe reemplazar a DataStore como fuente local principal.
+- Debe funcionar como override opcional.
+- Debe tener fallback local inmediato.
+- La app debe seguir calculando aunque Firebase no responda.
+- No requiere login en el MVP ni en la primera integración remota.
+
+Ruta futura sugerida:
 
 ```text
 /driverAssistantConfig
 ```
-
-No implementar login en el MVP.
-
-Si Firebase falla:
-
-- Usar configuración local segura.
-- Registrar el error en logs.
-- No bloquear la app.
 
 ---
 
@@ -593,6 +646,12 @@ Agregar tests unitarios para `AvoidZoneMatcher`:
 - Devuelve policy `REJECT`.
 - Devuelve policy `REVIEW`.
 
+Cuando se implemente DataStore:
+
+- Testear serialización/defaults si se usa Proto DataStore.
+- Testear que repository devuelve defaults seguros si no hay configuración guardada.
+- Testear actualización de campos críticos de configuración.
+
 ---
 
 ## Manejo de errores
@@ -604,7 +663,8 @@ Preferir estados explícitos:
 - Datos completos.
 - Datos incompletos.
 - OCR ambiguo.
-- Config remota no disponible.
+- Config local cargada.
+- Config local no disponible.
 - Permiso faltante.
 - Servicio detenido.
 
@@ -640,7 +700,7 @@ feat(calculator): add driver profit decision engine
 feat(ocr): add initial trip offer text parser
 feat(zones): add avoid zone matcher
 feat(overlay): add decision overlay service
-feat(config): add firebase driver config repository
+feat(config): add datastore driver config repository
 test(calculator): cover trip decision rules
 test(ocr): cover initial trip text parsing
 ```
@@ -684,16 +744,15 @@ El PR debe mencionar explícitamente:
 
 ## Roadmap inicial
 
-### PR 1 — Base técnica
+### PR 1 — Base técnica Android
 
 Objetivo:
 
 - Crear proyecto Android.
-- Crear configuración remota/local.
 - Crear motor de cálculo.
 - Crear parser OCR inicial con texto simulado.
 - Crear matcher de zonas por texto.
-- Crear overlay service.
+- Crear overlay service simulado o placeholder seguro.
 - Crear pantalla técnica mínima.
 - Agregar tests unitarios.
 
@@ -701,12 +760,38 @@ No incluir:
 
 - Captura real.
 - ML Kit real.
+- Firebase.
 - Historial.
 - Mapa.
 - Geocoding.
 - UI final.
 
-### PR 2 — Captura real + OCR
+### PR 2 — Configuración local persistente
+
+Objetivo:
+
+- Implementar DataStore como fuente local de `DriverConfig`.
+- Persistir configuración del conductor.
+- Exponer configuración desde `DriverConfigRepository`.
+- Agregar defaults seguros.
+- Preparar UI mínima o acciones internas para actualizar valores críticos.
+
+No incluir:
+
+- Firebase.
+- Login.
+- Backend admin.
+
+### PR 3 — Overlay real
+
+Objetivo:
+
+- Convertir el placeholder en overlay funcional.
+- Mostrar card flotante con decisión y métricas.
+- Permitir prueba manual con datos simulados.
+- Respetar permisos y foreground service.
+
+### PR 4 — Captura real + OCR
 
 Objetivo:
 
@@ -716,7 +801,7 @@ Objetivo:
 - Procesar texto real.
 - Conectar OCR con parser y motor.
 
-### PR 3 — Ajuste con capturas reales
+### PR 5 — Ajuste con capturas reales
 
 Objetivo:
 
@@ -725,7 +810,7 @@ Objetivo:
 - Mejorar detección de monto, km, minutos y zona.
 - Agregar fixtures de test.
 
-### PR 4 — Historial
+### PR 6 — Historial
 
 Objetivo:
 
@@ -734,14 +819,23 @@ Objetivo:
 - Exportar CSV.
 - Calcular métricas acumuladas.
 
-### PR 5 — UX privada
+### PR 7 — UX privada
 
 Objetivo:
 
 - Mejorar pantalla principal.
-- Agregar configuración local editable.
+- Agregar configuración local editable completa.
 - Mejorar overlay.
 - Agregar botón flotante de análisis manual.
+
+### PR futura — Firebase opcional
+
+Objetivo:
+
+- Agregar defaults remotos u override remoto.
+- Mantener DataStore como fuente local principal.
+- Sincronizar solo si aporta valor real.
+- No bloquear funcionamiento offline.
 
 ---
 
@@ -751,15 +845,16 @@ La tarea está terminada cuando:
 
 - La app compila.
 - Existe pantalla técnica mínima.
-- Se puede probar overlay con datos simulados.
+- Se puede probar cálculo con datos simulados.
 - Existe motor de cálculo testeado.
 - Existe parser OCR inicial testeado.
 - Existe matcher de zonas testeado.
-- Existe configuración local con estructura compatible con Firebase.
-- Existe repositorio de configuración con fallback local.
+- Existe configuración local default.
 - No se automatizan clicks.
 - No se usan APIs privadas de plataformas.
 - El README o PR indica limitaciones pendientes.
+
+Firebase no forma parte del done del MVP 1.
 
 ---
 
@@ -781,7 +876,7 @@ Antes de avanzar a una UI final, definir:
 
 ## Prioridad actual
 
-La prioridad actual es crear una base sólida y testeable.
+La prioridad actual es crear una base sólida, offline-first y testeable.
 
 Orden recomendado:
 
@@ -791,9 +886,9 @@ Orden recomendado:
 4. Matcher de zonas.
 5. Parser OCR inicial.
 6. Overlay simulado.
-7. Config local/Firebase.
+7. Config local default.
 8. Pantalla técnica mínima.
 9. Tests.
+10. DataStore para persistir configuración.
 
-No avanzar a captura real hasta que el cálculo, parser simulado, zonas y overlay estén validados.
-
+No avanzar a Firebase hasta que la app funcione localmente con cálculo, parser simulado, zonas, overlay y configuración persistente.
