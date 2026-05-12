@@ -2,6 +2,7 @@ package com.zibete.driverassistant.ui
 
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.provider.Settings
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -131,6 +132,7 @@ fun MainScreenContent(
             )
 
             StatusSection(uiState)
+            ForegroundServiceInfoSection(uiState.serviceStatus)
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -222,7 +224,11 @@ private fun startDecisionOverlay(
         putExtra(DriverDecisionOverlayService.EXTRA_SHORT_REASON, overlayState.shortReason)
     }
 
-    context.startService(intent)
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        context.startForegroundService(intent)
+    } else {
+        context.startService(intent)
+    }
     viewModel.markOverlayStarted()
 }
 
@@ -236,6 +242,24 @@ private fun StatusSection(uiState: MainUiState) {
             Text("Overlay: ${uiState.overlayPermissionStatus}")
             Text("Captura: ${uiState.screenCapturePermissionStatus}")
             Text("Servicio: ${uiState.serviceStatus}")
+        }
+    }
+}
+
+@Composable
+private fun ForegroundServiceInfoSection(serviceStatus: String) {
+    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Text(
+                text = "Notificacion del servicio",
+                style = MaterialTheme.typography.titleMedium
+            )
+            Text("Overlay de decision activo")
+            Text("Estado actual: $serviceStatus")
+            Text("La notificacion permite detener el overlay sin volver a la app.")
         }
     }
 }
