@@ -4,6 +4,8 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.provider.Settings
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -34,6 +36,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.zibete.driverassistant.calculator.DriverDecision
 import com.zibete.driverassistant.calculator.TripDecisionResult
+import com.zibete.driverassistant.capture.ScreenCaptureManager
 import com.zibete.driverassistant.config.DriverConfig
 import com.zibete.driverassistant.overlay.DriverDecisionOverlayService
 import com.zibete.driverassistant.overlay.OverlayCardState
@@ -50,6 +53,17 @@ fun MainScreen(
     val resolvedViewModel = viewModel ?: viewModel(factory = factory)
     val uiState by resolvedViewModel.uiState.collectAsState()
     val overlayPermissionHelper = remember { OverlayPermissionHelper() }
+    val screenCaptureManager = remember(context) { ScreenCaptureManager(context) }
+    val screenCaptureLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        resolvedViewModel.updateScreenCaptureSession(
+            screenCaptureManager.handlePermissionResult(
+                resultCode = result.resultCode,
+                data = result.data
+            )
+        )
+    }
     val lifecycleOwner = LocalLifecycleOwner.current
 
     DisposableEffect(lifecycleOwner, context) {
@@ -77,6 +91,13 @@ fun MainScreen(
                 overlayPermissionHelper.buildOverlaySettingsUri(context)
             )
             context.startActivity(intent)
+        },
+        onRequestScreenCapturePermission = {
+            resolvedViewModel.markScreenCapturePending()
+            screenCaptureLauncher.launch(screenCaptureManager.buildPermissionIntent())
+        },
+        onStopScreenCapture = {
+            resolvedViewModel.updateScreenCaptureSession(screenCaptureManager.stopSession())
         },
         onStartService = {
             val overlayState = resolvedViewModel.runSimulatedTripDecision()
@@ -110,6 +131,8 @@ fun MainScreenContent(
     uiState: MainUiState,
     overlayActionsEnabled: Boolean,
     onRequestOverlayPermission: () -> Unit,
+    onRequestScreenCapturePermission: () -> Unit,
+    onStopScreenCapture: () -> Unit,
     onStartService: () -> Unit,
     onStopService: () -> Unit,
     onRunSimulatedDecision: () -> Unit,
@@ -133,6 +156,7 @@ fun MainScreenContent(
 
             StatusSection(uiState)
             ForegroundServiceInfoSection(uiState.serviceStatus)
+            ScreenCaptureInfoSection(uiState)
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -146,10 +170,17 @@ fun MainScreenContent(
                 }
                 OutlinedButton(
                     modifier = Modifier.weight(1f),
-                    onClick = { }
+                    onClick = onRequestScreenCapturePermission
                 ) {
                     Text("Permiso captura")
                 }
+            }
+
+            OutlinedButton(
+                modifier = Modifier.fillMaxWidth(),
+                onClick = onStopScreenCapture
+            ) {
+                Text("Detener captura")
             }
 
             Row(
@@ -265,6 +296,26 @@ private fun ForegroundServiceInfoSection(serviceStatus: String) {
 }
 
 @Composable
+private fun ScreenCaptureInfoSection(uiState: MainUiState) {
+    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer)) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Text(
+                text = "Captura de pantalla",
+                style = MaterialTheme.typography.titleMedium
+            )
+            Text("Estado: ${uiState.screenCapturePermissionStatus}")
+            Text("MediaProjection solo queda autorizado; todavia no se captura ni procesa imagen.")
+            uiState.screenCaptureErrorMessage?.let { errorMessage ->
+                Text("Detalle: $errorMessage")
+            }
+        }
+    }
+}
+
+@Composable
 private fun DecisionSection(result: TripDecisionResult?) {
     Card {
         Column(
@@ -361,6 +412,8 @@ fun MainScreenPreview() {
             uiState = sampleUiState,
             overlayActionsEnabled = true,
             onRequestOverlayPermission = {},
+            onRequestScreenCapturePermission = {},
+            onStopScreenCapture = {},
             onStartService = {},
             onStopService = {},
             onRunSimulatedDecision = {},
