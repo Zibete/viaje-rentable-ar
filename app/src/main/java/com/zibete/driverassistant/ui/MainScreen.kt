@@ -190,6 +190,7 @@ fun MainScreenContent(
             StatusSection(uiState)
             ForegroundServiceInfoSection(uiState.serviceStatus)
             ScreenCaptureInfoSection(uiState)
+            OcrInfoSection(uiState)
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -362,6 +363,29 @@ private fun ScreenCaptureInfoSection(uiState: MainUiState) {
 }
 
 @Composable
+private fun OcrInfoSection(uiState: MainUiState) {
+    Card {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Text(
+                text = "OCR",
+                style = MaterialTheme.typography.titleMedium
+            )
+            Text("Estado: ${uiState.ocrStatus}")
+            uiState.lastRecognizedText?.takeIf { it.isNotBlank() }?.let { text ->
+                Text("Texto detectado:")
+                Text(text)
+            }
+            uiState.ocrErrorMessage?.let { errorMessage ->
+                Text("Detalle: $errorMessage")
+            }
+        }
+    }
+}
+
+@Composable
 private fun DecisionSection(result: TripDecisionResult?) {
     Card {
         Column(
@@ -445,6 +469,8 @@ fun MainScreenPreview() {
         lastCapturedFrameWidth = 1080,
         lastCapturedFrameHeight = 2400,
         lastCapturedFrameTimestamp = 1_700_000_000_000L,
+        ocrStatus = "Texto detectado",
+        lastRecognizedText = "ARS 5.127\n41 min\n8.0 km",
         serviceStatus = "Ejecutando",
         lastConfig = DriverConfig.default(),
         lastDecision = TripDecisionResult(

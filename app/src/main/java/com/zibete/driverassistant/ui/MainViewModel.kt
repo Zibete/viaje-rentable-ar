@@ -8,6 +8,7 @@ import com.zibete.driverassistant.capture.ScreenCaptureSession
 import com.zibete.driverassistant.capture.ScreenCaptureStatus
 import com.zibete.driverassistant.config.DriverConfig
 import com.zibete.driverassistant.config.DriverConfigRepository
+import com.zibete.driverassistant.ocr.OcrStatus
 import com.zibete.driverassistant.overlay.OverlayCardState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -66,7 +67,10 @@ class MainViewModel(
                 screenCaptureErrorMessage = null,
                 lastCapturedFrameWidth = null,
                 lastCapturedFrameHeight = null,
-                lastCapturedFrameTimestamp = null
+                lastCapturedFrameTimestamp = null,
+                ocrStatus = OcrStatus.IDLE.toSpanishStatus(),
+                lastRecognizedText = null,
+                ocrErrorMessage = null
             )
         }
     }
@@ -79,7 +83,10 @@ class MainViewModel(
                 screenCaptureErrorMessage = session.errorMessage,
                 lastCapturedFrameWidth = frame?.width,
                 lastCapturedFrameHeight = frame?.height,
-                lastCapturedFrameTimestamp = frame?.capturedAtMillis
+                lastCapturedFrameTimestamp = frame?.capturedAtMillis,
+                ocrStatus = session.ocrStatus.toSpanishStatus(),
+                lastRecognizedText = session.recognizedText,
+                ocrErrorMessage = session.ocrErrorMessage
             )
         }
     }
@@ -127,6 +134,16 @@ class MainViewModel(
             ScreenCaptureStatus.CAPTURE_AVAILABLE -> "Captura disponible"
             ScreenCaptureStatus.STOPPED -> "Captura detenida"
             ScreenCaptureStatus.ERROR -> "Error de captura"
+        }
+    }
+
+    private fun OcrStatus.toSpanishStatus(): String {
+        return when (this) {
+            OcrStatus.IDLE -> "OCR inactivo"
+            OcrStatus.PROCESSING -> "OCR procesando"
+            OcrStatus.TEXT_DETECTED -> "Texto detectado"
+            OcrStatus.NO_TEXT -> "Sin texto detectado"
+            OcrStatus.ERROR -> "Error OCR"
         }
     }
 }

@@ -1,0 +1,42 @@
+package com.zibete.driverassistant.ocr
+
+import android.graphics.Bitmap
+import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.text.TextRecognition
+import com.google.mlkit.vision.text.latin.TextRecognizerOptions
+
+class MlKitScreenTextRecognizer {
+    fun recognizeText(
+        bitmap: Bitmap,
+        onResult: (OcrTextResult) -> Unit
+    ) {
+        val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+        val image = InputImage.fromBitmap(bitmap, 0)
+
+        recognizer.process(image)
+            .addOnSuccessListener { recognizedText ->
+                val rawText = recognizedText.text.trim()
+                onResult(
+                    if (rawText.isBlank()) {
+                        OcrTextResult(status = OcrStatus.NO_TEXT)
+                    } else {
+                        OcrTextResult(
+                            status = OcrStatus.TEXT_DETECTED,
+                            rawText = rawText
+                        )
+                    }
+                )
+            }
+            .addOnFailureListener { error ->
+                onResult(
+                    OcrTextResult(
+                        status = OcrStatus.ERROR,
+                        errorMessage = error.message ?: "No se pudo reconocer texto en el frame."
+                    )
+                )
+            }
+            .addOnCompleteListener {
+                recognizer.close()
+            }
+    }
+}
