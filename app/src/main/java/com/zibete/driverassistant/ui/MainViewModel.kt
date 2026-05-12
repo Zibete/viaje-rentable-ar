@@ -6,6 +6,7 @@ import com.zibete.driverassistant.calculator.DriverProfitCalculator
 import com.zibete.driverassistant.calculator.TripOfferInput
 import com.zibete.driverassistant.config.DriverConfig
 import com.zibete.driverassistant.config.DriverConfigRepository
+import com.zibete.driverassistant.overlay.OverlayCardState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -27,12 +28,33 @@ class MainViewModel(
         }
     }
 
-    fun startServicePlaceholder() {
-        _uiState.update { it.copy(serviceStatus = "Servicio simulado iniciado") }
+    fun refreshOverlayPermission(canDrawOverlays: Boolean) {
+        _uiState.update {
+            it.copy(
+                overlayPermissionStatus = if (canDrawOverlays) {
+                    "Otorgado"
+                } else {
+                    "Falta permiso"
+                }
+            )
+        }
     }
 
-    fun stopServicePlaceholder() {
+    fun markOverlayStarted() {
+        _uiState.update { it.copy(serviceStatus = "Overlay activo") }
+    }
+
+    fun markOverlayStopped() {
         _uiState.update { it.copy(serviceStatus = "Detenido") }
+    }
+
+    fun markOverlayPermissionMissing() {
+        _uiState.update {
+            it.copy(
+                overlayPermissionStatus = "Falta permiso",
+                serviceStatus = "No iniciado: falta permiso overlay"
+            )
+        }
     }
 
     fun increaseMinArsPerKmPlaceholder() {
@@ -50,7 +72,7 @@ class MainViewModel(
         }
     }
 
-    fun runSimulatedTripDecision() {
+    fun runSimulatedTripDecision(): OverlayCardState {
         val config = _uiState.value.lastConfig ?: DriverConfig.default()
         val simulatedInput = TripOfferInput(
             fareAmount = 5127.0,
@@ -68,5 +90,6 @@ class MainViewModel(
         )
 
         _uiState.update { it.copy(lastDecision = result, lastConfig = config) }
+        return OverlayCardState.fromDecisionResult(result)
     }
 }

@@ -10,6 +10,18 @@ El producto no debe automatizar acciones sobre apps externas. La decisión final
 
 ---
 
+## Alineacion del repositorio
+
+Antes de editar codigo, el agente debe verificar ruta, rama, remoto y wrapper de Gradle.
+
+Si la ruta o rama no coincide con la indicada por el usuario, debe corregir el checkout antes de modificar archivos.
+
+No debe crear una rama con el mismo nombre si el usuario indico que ya existe.
+
+Si detecta desalineacion, debe reportarla y no avanzar con cambios funcionales hasta resolverla.
+
+---
+
 ## Objetivo del producto
 
 Construir una app Android privada que permita configurar reglas personales de rentabilidad para viajes.
