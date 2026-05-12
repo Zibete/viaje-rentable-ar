@@ -1,7 +1,12 @@
 package com.zibete.driverassistant.overlay
 
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.Typeface
@@ -15,6 +20,7 @@ import android.view.View
 import android.view.WindowManager
 import android.widget.LinearLayout
 import android.widget.TextView
+import androidx.core.app.NotificationCompat
 import com.zibete.driverassistant.calculator.DriverDecision
 
 class DriverDecisionOverlayService : Service() {
@@ -28,12 +34,19 @@ class DriverDecisionOverlayService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action == ACTION_STOP) {
+            stopSelf()
+            return START_NOT_STICKY
+        }
+
         if (!Settings.canDrawOverlays(this)) {
             stopSelf()
             return START_NOT_STICKY
         }
 
         val state = intent?.toOverlayCardState() ?: OverlayCardState.simulatedAccept()
+        ensureNotificationChannel()
+        startAsForegroundService(state)
         updateOverlayState(state)
         return START_NOT_STICKY
     }
@@ -135,6 +148,64 @@ class DriverDecisionOverlayService : Service() {
         }
     }
 
+    private fun ensureNotificationChannel() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            return
+        }
+
+        val channel = NotificationChannel(
+            NOTIFICATION_CHANNEL_ID,
+            "Overlay de decision",
+            NotificationManager.IMPORTANCE_LOW
+        ).apply {
+            description = "Mantiene visible la recomendacion flotante del viaje."
+            setShowBadge(false)
+        }
+
+        getSystemService(NotificationManager::class.java)
+            .createNotificationChannel(channel)
+    }
+
+    private fun startAsForegroundService(state: OverlayCardState) {
+        val notification = buildForegroundNotification(state)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            startForeground(
+                NOTIFICATION_ID,
+                notification,
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+            )
+        } else {
+            startForeground(NOTIFICATION_ID, notification)
+        }
+    }
+
+    private fun buildForegroundNotification(state: OverlayCardState): Notification {
+        val stopIntent = Intent(this, DriverDecisionOverlayService::class.java).apply {
+            action = ACTION_STOP
+        }
+        val stopPendingIntent = PendingIntent.getService(
+            this,
+            STOP_REQUEST_CODE,
+            stopIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        return NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setContentTitle("Overlay de decision activo")
+            .setContentText("${state.decision.toSpanishLabel()} - ${state.fareText}")
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setCategory(NotificationCompat.CATEGORY_SERVICE)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .addAction(
+                android.R.drawable.ic_menu_close_clear_cancel,
+                "Detener",
+                stopPendingIntent
+            )
+            .build()
+    }
+
     private fun overlayText(
         text: String,
         sizeSp: Float,
@@ -210,6 +281,7 @@ class DriverDecisionOverlayService : Service() {
     }
 
     companion object {
+        const val ACTION_STOP = "com.zibete.driverassistant.overlay.STOP"
         const val EXTRA_DECISION = "extra_decision"
         const val EXTRA_FARE_TEXT = "extra_fare_text"
         const val EXTRA_ARS_PER_HOUR_TEXT = "extra_ars_per_hour_text"
@@ -217,5 +289,9 @@ class DriverDecisionOverlayService : Service() {
         const val EXTRA_TOTAL_TIME_TEXT = "extra_total_time_text"
         const val EXTRA_TOTAL_KM_TEXT = "extra_total_km_text"
         const val EXTRA_SHORT_REASON = "extra_short_reason"
+
+        private const val NOTIFICATION_CHANNEL_ID = "decision_overlay_service"
+        private const val NOTIFICATION_ID = 4101
+        private const val STOP_REQUEST_CODE = 4102
     }
 }
