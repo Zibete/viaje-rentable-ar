@@ -18,7 +18,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -29,15 +31,20 @@ import kotlin.math.roundToInt
 
 @Composable
 fun MainScreen(
-    viewModel: MainViewModel = viewModel()
+    viewModel: MainViewModel? = null
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val context = LocalContext.current.applicationContext
+    val factory = remember(context) { MainViewModelFactory(context) }
+    val resolvedViewModel = viewModel ?: viewModel(factory = factory)
+    val uiState by resolvedViewModel.uiState.collectAsState()
 
     MainScreenContent(
         uiState = uiState,
-        onStartService = viewModel::startServicePlaceholder,
-        onStopService = viewModel::stopServicePlaceholder,
-        onRunSimulatedDecision = viewModel::runSimulatedTripDecision
+        onStartService = resolvedViewModel::startServicePlaceholder,
+        onStopService = resolvedViewModel::stopServicePlaceholder,
+        onRunSimulatedDecision = resolvedViewModel::runSimulatedTripDecision,
+        onIncreaseMinArsPerKm = resolvedViewModel::increaseMinArsPerKmPlaceholder,
+        onResetConfig = resolvedViewModel::resetConfigToDefaults
     )
 }
 
@@ -46,7 +53,9 @@ fun MainScreenContent(
     uiState: MainUiState,
     onStartService: () -> Unit,
     onStopService: () -> Unit,
-    onRunSimulatedDecision: () -> Unit
+    onRunSimulatedDecision: () -> Unit,
+    onIncreaseMinArsPerKm: () -> Unit,
+    onResetConfig: () -> Unit
 ) {
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -105,7 +114,25 @@ fun MainScreenContent(
                 modifier = Modifier.fillMaxWidth(),
                 onClick = onRunSimulatedDecision
             ) {
-                Text("Probar cálculo simulado")
+                Text("Probar calculo simulado")
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                OutlinedButton(
+                    modifier = Modifier.weight(1f),
+                    onClick = onIncreaseMinArsPerKm
+                ) {
+                    Text("Subir min ${'$'}/km")
+                }
+                OutlinedButton(
+                    modifier = Modifier.weight(1f),
+                    onClick = onResetConfig
+                ) {
+                    Text("Restablecer config")
+                }
             }
 
             DecisionSection(uiState.lastDecision)
@@ -136,17 +163,17 @@ private fun DecisionSection(result: TripDecisionResult?) {
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Text(
-                text = "Última decisión",
+                text = "Ultima decision",
                 style = MaterialTheme.typography.titleMedium
             )
 
             if (result == null) {
-                Text("Sin cálculo todavía")
+                Text("Sin calculo todavia")
             } else {
                 Text(result.decision.toSpanishLabel(), style = MaterialTheme.typography.titleLarge)
                 Text("${'$'} ${result.fareAmount?.roundToInt() ?: "-"}")
-                Text("${result.arsPerHour.toDisplayMoney()}/h · ${result.arsPerKm.toDisplayMoney()}/km")
-                Text("${result.totalMinutes.toDisplayNumber()} min · ${result.totalKm.toDisplayNumber()} km")
+                Text("${result.arsPerHour.toDisplayMoney()}/h - ${result.arsPerKm.toDisplayMoney()}/km")
+                Text("${result.totalMinutes.toDisplayNumber()} min - ${result.totalKm.toDisplayNumber()} km")
 
                 val mainReason = result.rejectionReasons.firstOrNull()
                     ?: result.reviewReasons.firstOrNull()
@@ -166,15 +193,15 @@ private fun ConfigSection(config: DriverConfig?) {
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Text(
-                text = "Configuración cargada",
+                text = "Configuracion cargada",
                 style = MaterialTheme.typography.titleMedium
             )
 
             if (config == null) {
-                Text("Cargando configuración local")
+                Text("Cargando configuracion local")
             } else {
-                Text("Mínimo: ${config.minArsPerKm.roundToInt()} ${'$'}/km · ${config.minArsPerHour.roundToInt()} ${'$'}/h")
-                Text("Pickup máximo: ${config.maxPickupKm.toDisplayNumber()} km · ${config.maxPickupMinutes.toDisplayNumber()} min")
+                Text("Minimo: ${config.minArsPerKm.roundToInt()} ${'$'}/km - ${config.minArsPerHour.roundToInt()} ${'$'}/h")
+                Text("Pickup maximo: ${config.maxPickupKm.toDisplayNumber()} km - ${config.maxPickupMinutes.toDisplayNumber()} min")
                 Text("Zonas configuradas: ${config.avoidZones.size}")
             }
         }
@@ -225,7 +252,9 @@ fun MainScreenPreview() {
             uiState = sampleUiState,
             onStartService = {},
             onStopService = {},
-            onRunSimulatedDecision = {}
+            onRunSimulatedDecision = {},
+            onIncreaseMinArsPerKm = {},
+            onResetConfig = {}
         )
     }
 }
