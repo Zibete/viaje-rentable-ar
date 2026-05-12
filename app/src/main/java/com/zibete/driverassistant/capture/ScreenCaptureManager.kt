@@ -8,6 +8,7 @@ import android.media.projection.MediaProjectionManager
 class ScreenCaptureManager(
     context: Context
 ) {
+    private val appContext = context.applicationContext
     private val mediaProjectionManager = context.getSystemService(MediaProjectionManager::class.java)
     private var currentSession: ScreenCaptureSession = ScreenCaptureSession(
         status = ScreenCaptureStatus.STOPPED
@@ -33,7 +34,65 @@ class ScreenCaptureManager(
         return currentSession
     }
 
+    fun captureOnce(): ScreenCaptureSession {
+        val resultCode = currentSession.resultCode
+        val resultData = currentSession.resultData
+        if (resultCode == null || resultData == null || currentSession.status == ScreenCaptureStatus.STOPPED) {
+            currentSession = currentSession.copy(
+                status = ScreenCaptureStatus.ERROR,
+                errorMessage = "La captura no esta autorizada. Solicita permiso de captura primero."
+            )
+            return currentSession
+        }
+
+        val serviceIntent = Intent(appContext, ScreenCaptureFrameService::class.java).apply {
+            action = ScreenCaptureFrameService.ACTION_CAPTURE_ONCE
+            putExtra(ScreenCaptureFrameService.EXTRA_RESULT_CODE, resultCode)
+            putExtra(ScreenCaptureFrameService.EXTRA_RESULT_DATA, resultData)
+        }
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            appContext.startForegroundService(serviceIntent)
+        } else {
+            appContext.startService(serviceIntent)
+        }
+
+        currentSession = currentSession.copy(
+            status = ScreenCaptureStatus.PENDING,
+            lastFrame = null,
+            errorMessage = null
+        )
+        return currentSession
+    }
+
+    fun handleCaptureResult(intent: Intent): ScreenCaptureSession {
+        val status = intent.getStringExtra(ScreenCaptureFrameService.EXTRA_STATUS)
+            ?.let { runCatching { ScreenCaptureStatus.valueOf(it) }.getOrNull() }
+            ?: ScreenCaptureStatus.ERROR
+        val frame = if (status == ScreenCaptureStatus.CAPTURE_AVAILABLE) {
+            ScreenCaptureFrame(
+                width = intent.getIntExtra(ScreenCaptureFrameService.EXTRA_FRAME_WIDTH, 0),
+                height = intent.getIntExtra(ScreenCaptureFrameService.EXTRA_FRAME_HEIGHT, 0),
+                capturedAtMillis = intent.getLongExtra(
+                    ScreenCaptureFrameService.EXTRA_CAPTURED_AT_MILLIS,
+                    System.currentTimeMillis()
+                )
+            )
+        } else {
+            null
+        }
+
+        currentSession = currentSession.copy(
+            status = status,
+            resultCode = null,
+            resultData = null,
+            lastFrame = frame,
+            errorMessage = intent.getStringExtra(ScreenCaptureFrameService.EXTRA_ERROR_MESSAGE)
+        )
+        return currentSession
+    }
+
     fun stopSession(): ScreenCaptureSession {
+        appContext.stopService(Intent(appContext, ScreenCaptureFrameService::class.java))
         currentSession = ScreenCaptureSession(status = ScreenCaptureStatus.STOPPED)
         return currentSession
     }

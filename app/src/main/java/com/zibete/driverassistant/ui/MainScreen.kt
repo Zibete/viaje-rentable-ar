@@ -1,7 +1,9 @@
 package com.zibete.driverassistant.ui
 
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.os.Build
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -36,11 +38,15 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.zibete.driverassistant.calculator.DriverDecision
 import com.zibete.driverassistant.calculator.TripDecisionResult
+import com.zibete.driverassistant.capture.ScreenCaptureFrameService
 import com.zibete.driverassistant.capture.ScreenCaptureManager
 import com.zibete.driverassistant.config.DriverConfig
 import com.zibete.driverassistant.overlay.DriverDecisionOverlayService
 import com.zibete.driverassistant.overlay.OverlayCardState
 import com.zibete.driverassistant.overlay.OverlayPermissionHelper
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import kotlin.math.roundToInt
 
 @Composable
@@ -82,6 +88,29 @@ fun MainScreen(
         }
     }
 
+    DisposableEffect(context, screenCaptureManager) {
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(receiverContext: Context?, intent: Intent?) {
+                if (intent?.action == ScreenCaptureFrameService.ACTION_CAPTURE_RESULT) {
+                    resolvedViewModel.updateScreenCaptureSession(
+                        screenCaptureManager.handleCaptureResult(intent)
+                    )
+                }
+            }
+        }
+        val filter = IntentFilter(ScreenCaptureFrameService.ACTION_CAPTURE_RESULT)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            context.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            @Suppress("DEPRECATION")
+            context.registerReceiver(receiver, filter)
+        }
+
+        onDispose {
+            context.unregisterReceiver(receiver)
+        }
+    }
+
     MainScreenContent(
         uiState = uiState,
         overlayActionsEnabled = uiState.overlayPermissionStatus == "Otorgado",
@@ -98,6 +127,9 @@ fun MainScreen(
         },
         onStopScreenCapture = {
             resolvedViewModel.updateScreenCaptureSession(screenCaptureManager.stopSession())
+        },
+        onCaptureFrame = {
+            resolvedViewModel.updateScreenCaptureSession(screenCaptureManager.captureOnce())
         },
         onStartService = {
             val overlayState = resolvedViewModel.runSimulatedTripDecision()
@@ -133,6 +165,7 @@ fun MainScreenContent(
     onRequestOverlayPermission: () -> Unit,
     onRequestScreenCapturePermission: () -> Unit,
     onStopScreenCapture: () -> Unit,
+    onCaptureFrame: () -> Unit,
     onStartService: () -> Unit,
     onStopService: () -> Unit,
     onRunSimulatedDecision: () -> Unit,
@@ -174,6 +207,13 @@ fun MainScreenContent(
                 ) {
                     Text("Permiso captura")
                 }
+            }
+
+            OutlinedButton(
+                modifier = Modifier.fillMaxWidth(),
+                onClick = onCaptureFrame
+            ) {
+                Text("Capturar frame")
             }
 
             OutlinedButton(
@@ -307,7 +347,13 @@ private fun ScreenCaptureInfoSection(uiState: MainUiState) {
                 style = MaterialTheme.typography.titleMedium
             )
             Text("Estado: ${uiState.screenCapturePermissionStatus}")
-            Text("MediaProjection solo queda autorizado; todavia no se captura ni procesa imagen.")
+            Text("Captura puntual con MediaProjection; todavia no se procesa OCR.")
+            if (uiState.lastCapturedFrameWidth != null && uiState.lastCapturedFrameHeight != null) {
+                Text("Frame: ${uiState.lastCapturedFrameWidth} x ${uiState.lastCapturedFrameHeight}")
+            }
+            uiState.lastCapturedFrameTimestamp?.let { timestamp ->
+                Text("Ultima captura: ${timestamp.toDisplayTime()}")
+            }
             uiState.screenCaptureErrorMessage?.let { errorMessage ->
                 Text("Detalle: $errorMessage")
             }
@@ -386,12 +432,19 @@ private fun Double?.toDisplayNumber(): String {
     return this?.let { "%.1f".format(it) } ?: "-"
 }
 
+private fun Long.toDisplayTime(): String {
+    return SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(this))
+}
+
 @Preview(showBackground = true)
 @Composable
 fun MainScreenPreview() {
     val sampleUiState = MainUiState(
         overlayPermissionStatus = "Concedido",
-        screenCapturePermissionStatus = "Concedido",
+        screenCapturePermissionStatus = "Captura disponible",
+        lastCapturedFrameWidth = 1080,
+        lastCapturedFrameHeight = 2400,
+        lastCapturedFrameTimestamp = 1_700_000_000_000L,
         serviceStatus = "Ejecutando",
         lastConfig = DriverConfig.default(),
         lastDecision = TripDecisionResult(
@@ -414,6 +467,7 @@ fun MainScreenPreview() {
             onRequestOverlayPermission = {},
             onRequestScreenCapturePermission = {},
             onStopScreenCapture = {},
+            onCaptureFrame = {},
             onStartService = {},
             onStopService = {},
             onRunSimulatedDecision = {},

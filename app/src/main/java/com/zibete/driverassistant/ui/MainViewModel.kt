@@ -63,16 +63,23 @@ class MainViewModel(
         _uiState.update {
             it.copy(
                 screenCapturePermissionStatus = "Captura pendiente",
-                screenCaptureErrorMessage = null
+                screenCaptureErrorMessage = null,
+                lastCapturedFrameWidth = null,
+                lastCapturedFrameHeight = null,
+                lastCapturedFrameTimestamp = null
             )
         }
     }
 
     fun updateScreenCaptureSession(session: ScreenCaptureSession) {
+        val frame = session.lastFrame
         _uiState.update {
             it.copy(
                 screenCapturePermissionStatus = session.status.toSpanishStatus(),
-                screenCaptureErrorMessage = session.errorMessage
+                screenCaptureErrorMessage = session.errorMessage,
+                lastCapturedFrameWidth = frame?.width,
+                lastCapturedFrameHeight = frame?.height,
+                lastCapturedFrameTimestamp = frame?.capturedAtMillis
             )
         }
     }
@@ -117,6 +124,7 @@ class MainViewModel(
         return when (this) {
             ScreenCaptureStatus.PENDING -> "Captura pendiente"
             ScreenCaptureStatus.AUTHORIZED -> "Captura autorizada"
+            ScreenCaptureStatus.CAPTURE_AVAILABLE -> "Captura disponible"
             ScreenCaptureStatus.STOPPED -> "Captura detenida"
             ScreenCaptureStatus.ERROR -> "Error de captura"
         }
