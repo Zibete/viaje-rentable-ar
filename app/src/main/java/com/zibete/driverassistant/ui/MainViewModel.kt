@@ -6,7 +6,6 @@ import com.zibete.driverassistant.calculator.DriverProfitCalculator
 import com.zibete.driverassistant.calculator.TripOfferInput
 import com.zibete.driverassistant.config.DriverConfig
 import com.zibete.driverassistant.config.DriverConfigRepository
-import com.zibete.driverassistant.config.LocalDriverConfigRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -14,7 +13,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 class MainViewModel(
-    private val configRepository: DriverConfigRepository = LocalDriverConfigRepository(),
+    private val configRepository: DriverConfigRepository,
     private val calculator: DriverProfitCalculator = DriverProfitCalculator()
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(MainUiState())
@@ -22,7 +21,9 @@ class MainViewModel(
 
     init {
         viewModelScope.launch {
-            _uiState.update { it.copy(lastConfig = configRepository.getConfig()) }
+            configRepository.config.collect { config ->
+                _uiState.update { it.copy(lastConfig = config) }
+            }
         }
     }
 
@@ -32,6 +33,21 @@ class MainViewModel(
 
     fun stopServicePlaceholder() {
         _uiState.update { it.copy(serviceStatus = "Detenido") }
+    }
+
+    fun increaseMinArsPerKmPlaceholder() {
+        val currentConfig = _uiState.value.lastConfig ?: DriverConfig.default()
+        viewModelScope.launch {
+            configRepository.updateConfig(
+                currentConfig.copy(minArsPerKm = currentConfig.minArsPerKm + 25.0)
+            )
+        }
+    }
+
+    fun resetConfigToDefaults() {
+        viewModelScope.launch {
+            configRepository.resetToDefaults()
+        }
     }
 
     fun runSimulatedTripDecision() {
@@ -54,4 +70,3 @@ class MainViewModel(
         _uiState.update { it.copy(lastDecision = result, lastConfig = config) }
     }
 }
-
