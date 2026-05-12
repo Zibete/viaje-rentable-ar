@@ -1,5 +1,8 @@
 package com.zibete.driverassistant.ui
 
+import android.content.Context
+import android.content.Intent
+import android.provider.Settings
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -16,6 +19,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -23,26 +27,78 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.zibete.driverassistant.calculator.DriverDecision
 import com.zibete.driverassistant.calculator.TripDecisionResult
 import com.zibete.driverassistant.config.DriverConfig
+import com.zibete.driverassistant.overlay.DriverDecisionOverlayService
+import com.zibete.driverassistant.overlay.OverlayCardState
+import com.zibete.driverassistant.overlay.OverlayPermissionHelper
 import kotlin.math.roundToInt
 
 @Composable
 fun MainScreen(
     viewModel: MainViewModel? = null
 ) {
-    val context = LocalContext.current.applicationContext
-    val factory = remember(context) { MainViewModelFactory(context) }
+    val context = LocalContext.current
+    val appContext = context.applicationContext
+    val factory = remember(appContext) { MainViewModelFactory(appContext) }
     val resolvedViewModel = viewModel ?: viewModel(factory = factory)
     val uiState by resolvedViewModel.uiState.collectAsState()
+    val overlayPermissionHelper = remember { OverlayPermissionHelper() }
+    val lifecycleOwner = LocalLifecycleOwner.current
+
+    DisposableEffect(lifecycleOwner, context) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                resolvedViewModel.refreshOverlayPermission(
+                    overlayPermissionHelper.canDrawOverlays(context)
+                )
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        resolvedViewModel.refreshOverlayPermission(overlayPermissionHelper.canDrawOverlays(context))
+
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
 
     MainScreenContent(
         uiState = uiState,
-        onStartService = resolvedViewModel::startServicePlaceholder,
-        onStopService = resolvedViewModel::stopServicePlaceholder,
-        onRunSimulatedDecision = resolvedViewModel::runSimulatedTripDecision,
+        overlayActionsEnabled = uiState.overlayPermissionStatus == "Otorgado",
+        onRequestOverlayPermission = {
+            val intent = Intent(
+                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                overlayPermissionHelper.buildOverlaySettingsUri(context)
+            )
+            context.startActivity(intent)
+        },
+        onStartService = {
+            val overlayState = resolvedViewModel.runSimulatedTripDecision()
+            startDecisionOverlay(
+                context = context,
+                overlayState = overlayState,
+                viewModel = resolvedViewModel,
+                overlayPermissionHelper = overlayPermissionHelper
+            )
+        },
+        onStopService = {
+            context.stopService(Intent(context, DriverDecisionOverlayService::class.java))
+            resolvedViewModel.markOverlayStopped()
+        },
+        onRunSimulatedDecision = {
+            val overlayState = resolvedViewModel.runSimulatedTripDecision()
+            startDecisionOverlay(
+                context = context,
+                overlayState = overlayState,
+                viewModel = resolvedViewModel,
+                overlayPermissionHelper = overlayPermissionHelper
+            )
+        },
         onIncreaseMinArsPerKm = resolvedViewModel::increaseMinArsPerKmPlaceholder,
         onResetConfig = resolvedViewModel::resetConfigToDefaults
     )
@@ -51,6 +107,8 @@ fun MainScreen(
 @Composable
 fun MainScreenContent(
     uiState: MainUiState,
+    overlayActionsEnabled: Boolean,
+    onRequestOverlayPermission: () -> Unit,
     onStartService: () -> Unit,
     onStopService: () -> Unit,
     onRunSimulatedDecision: () -> Unit,
@@ -80,7 +138,7 @@ fun MainScreenContent(
             ) {
                 OutlinedButton(
                     modifier = Modifier.weight(1f),
-                    onClick = { }
+                    onClick = onRequestOverlayPermission
                 ) {
                     Text("Permiso overlay")
                 }
@@ -98,6 +156,7 @@ fun MainScreenContent(
             ) {
                 Button(
                     modifier = Modifier.weight(1f),
+                    enabled = overlayActionsEnabled,
                     onClick = onStartService
                 ) {
                     Text("Iniciar")
@@ -112,9 +171,10 @@ fun MainScreenContent(
 
             Button(
                 modifier = Modifier.fillMaxWidth(),
+                enabled = overlayActionsEnabled,
                 onClick = onRunSimulatedDecision
             ) {
-                Text("Probar calculo simulado")
+                Text("Probar overlay simulado")
             }
 
             Row(
@@ -139,6 +199,31 @@ fun MainScreenContent(
             ConfigSection(uiState.lastConfig)
         }
     }
+}
+
+private fun startDecisionOverlay(
+    context: Context,
+    overlayState: OverlayCardState,
+    viewModel: MainViewModel,
+    overlayPermissionHelper: OverlayPermissionHelper
+) {
+    if (!overlayPermissionHelper.canDrawOverlays(context)) {
+        viewModel.markOverlayPermissionMissing()
+        return
+    }
+
+    val intent = Intent(context, DriverDecisionOverlayService::class.java).apply {
+        putExtra(DriverDecisionOverlayService.EXTRA_DECISION, overlayState.decision.name)
+        putExtra(DriverDecisionOverlayService.EXTRA_FARE_TEXT, overlayState.fareText)
+        putExtra(DriverDecisionOverlayService.EXTRA_ARS_PER_HOUR_TEXT, overlayState.arsPerHourText)
+        putExtra(DriverDecisionOverlayService.EXTRA_ARS_PER_KM_TEXT, overlayState.arsPerKmText)
+        putExtra(DriverDecisionOverlayService.EXTRA_TOTAL_TIME_TEXT, overlayState.totalTimeText)
+        putExtra(DriverDecisionOverlayService.EXTRA_TOTAL_KM_TEXT, overlayState.totalKmText)
+        putExtra(DriverDecisionOverlayService.EXTRA_SHORT_REASON, overlayState.shortReason)
+    }
+
+    context.startService(intent)
+    viewModel.markOverlayStarted()
 }
 
 @Composable
@@ -250,6 +335,8 @@ fun MainScreenPreview() {
     MaterialTheme {
         MainScreenContent(
             uiState = sampleUiState,
+            overlayActionsEnabled = true,
+            onRequestOverlayPermission = {},
             onStartService = {},
             onStopService = {},
             onRunSimulatedDecision = {},
