@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.zibete.driverassistant.calculator.DriverProfitCalculator
 import com.zibete.driverassistant.calculator.TripOfferInput
+import com.zibete.driverassistant.capture.ScreenCaptureSession
+import com.zibete.driverassistant.capture.ScreenCaptureStatus
 import com.zibete.driverassistant.config.DriverConfig
 import com.zibete.driverassistant.config.DriverConfigRepository
 import com.zibete.driverassistant.overlay.OverlayCardState
@@ -57,6 +59,24 @@ class MainViewModel(
         }
     }
 
+    fun markScreenCapturePending() {
+        _uiState.update {
+            it.copy(
+                screenCapturePermissionStatus = "Captura pendiente",
+                screenCaptureErrorMessage = null
+            )
+        }
+    }
+
+    fun updateScreenCaptureSession(session: ScreenCaptureSession) {
+        _uiState.update {
+            it.copy(
+                screenCapturePermissionStatus = session.status.toSpanishStatus(),
+                screenCaptureErrorMessage = session.errorMessage
+            )
+        }
+    }
+
     fun increaseMinArsPerKmPlaceholder() {
         val currentConfig = _uiState.value.lastConfig ?: DriverConfig.default()
         viewModelScope.launch {
@@ -91,5 +111,14 @@ class MainViewModel(
 
         _uiState.update { it.copy(lastDecision = result, lastConfig = config) }
         return OverlayCardState.fromDecisionResult(result)
+    }
+
+    private fun ScreenCaptureStatus.toSpanishStatus(): String {
+        return when (this) {
+            ScreenCaptureStatus.PENDING -> "Captura pendiente"
+            ScreenCaptureStatus.AUTHORIZED -> "Captura autorizada"
+            ScreenCaptureStatus.STOPPED -> "Captura detenida"
+            ScreenCaptureStatus.ERROR -> "Error de captura"
+        }
     }
 }
