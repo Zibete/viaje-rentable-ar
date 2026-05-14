@@ -5,6 +5,8 @@ import androidx.lifecycle.viewModelScope
 import com.zibete.driverassistant.calculator.DriverProfitCalculator
 import com.zibete.driverassistant.calculator.TripDecisionResult
 import com.zibete.driverassistant.calculator.TripOfferInput
+import com.zibete.driverassistant.capture.ScreenCaptureMonitorResult
+import com.zibete.driverassistant.capture.ScreenCaptureMonitorStatus
 import com.zibete.driverassistant.capture.ScreenCaptureSession
 import com.zibete.driverassistant.capture.ScreenCaptureStatus
 import com.zibete.driverassistant.config.DriverConfig
@@ -93,6 +95,55 @@ class MainViewModel(
                 ocrStatus = session.ocrStatus.toSpanishStatus(),
                 lastRecognizedText = session.recognizedText,
                 ocrErrorMessage = session.ocrErrorMessage
+            )
+        }
+    }
+
+    fun markMonitorWaitingPermission() {
+        _uiState.update {
+            it.copy(
+                monitorStatus = ScreenCaptureMonitorStatus.WAITING_PERMISSION.toSpanishStatus(),
+                monitorErrorMessage = null,
+                monitorOverlayStatus = null
+            )
+        }
+    }
+
+    fun markMonitorPermissionDenied() {
+        _uiState.update {
+            it.copy(
+                monitorStatus = ScreenCaptureMonitorStatus.ERROR.toSpanishStatus(),
+                monitorErrorMessage = "Permiso de captura cancelado o no autorizado.",
+                monitorOverlayStatus = null
+            )
+        }
+    }
+
+    fun markMonitorStopped() {
+        _uiState.update {
+            it.copy(
+                monitorStatus = ScreenCaptureMonitorStatus.STOPPED.toSpanishStatus(),
+                monitorErrorMessage = null,
+                monitorOverlayStatus = null
+            )
+        }
+    }
+
+    fun updateScreenCaptureMonitor(result: ScreenCaptureMonitorResult) {
+        _uiState.update {
+            it.copy(
+                monitorStatus = result.status.toSpanishStatus(),
+                monitorLastRecognizedText = result.recognizedText
+                    ?: it.monitorLastRecognizedText,
+                monitorErrorMessage = result.errorMessage,
+                monitorOverlayStatus = result.toOverlayStatusMessage(),
+                ocrStatus = result.ocrStatus.toSpanishStatus(),
+                lastRecognizedText = result.recognizedText ?: it.lastRecognizedText,
+                ocrErrorMessage = result.errorMessage,
+                lastDecision = result.decisionResult ?: it.lastDecision,
+                lastRealDecision = result.decisionResult ?: it.lastRealDecision,
+                decisionStatusMessage = result.decisionResult?.toAnalysisStatusMessage()
+                    ?: it.decisionStatusMessage
             )
         }
     }
@@ -203,6 +254,33 @@ class MainViewModel(
             OcrStatus.TEXT_DETECTED -> "Texto detectado"
             OcrStatus.NO_TEXT -> "Sin texto detectado"
             OcrStatus.ERROR -> "Error OCR"
+        }
+    }
+
+    private fun ScreenCaptureMonitorStatus.toSpanishStatus(): String {
+        return when (this) {
+            ScreenCaptureMonitorStatus.STOPPED -> "Detenido"
+            ScreenCaptureMonitorStatus.WAITING_PERMISSION -> "Esperando permiso"
+            ScreenCaptureMonitorStatus.MONITORING -> "Monitoreando"
+            ScreenCaptureMonitorStatus.ANALYZING -> "Analizando"
+            ScreenCaptureMonitorStatus.OFFER_DETECTED -> "Oferta detectada"
+            ScreenCaptureMonitorStatus.NO_OFFER_DETECTED -> "Sin oferta detectada"
+            ScreenCaptureMonitorStatus.ERROR -> "Error"
+        }
+    }
+
+    private fun ScreenCaptureMonitorResult.toOverlayStatusMessage(): String? {
+        return when {
+            status == ScreenCaptureMonitorStatus.OFFER_DETECTED && overlayUpdated -> {
+                "Overlay actualizado con oferta detectada"
+            }
+            status == ScreenCaptureMonitorStatus.OFFER_DETECTED -> {
+                "Oferta ya mostrada; no se duplico el overlay"
+            }
+            status == ScreenCaptureMonitorStatus.NO_OFFER_DETECTED -> {
+                "No se detecto oferta en los ultimos ciclos"
+            }
+            else -> null
         }
     }
 
