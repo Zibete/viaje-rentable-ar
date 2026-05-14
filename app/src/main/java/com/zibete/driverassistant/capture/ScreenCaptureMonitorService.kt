@@ -231,22 +231,23 @@ class ScreenCaptureMonitorService : Service() {
             is TripOfferAnalysisResult.DecisionReady -> {
                 noOfferCycles = 0
                 val result = analysis.result
-                if (!result.hasCompleteOverlayData()) {
-                    markIncompleteOffer(rawText, result)
-                    return
-                }
-
-                val shouldShowOverlay = detectionState.shouldShowOverlay(analysis.input)
+                val hasCompleteData = result.hasCompleteOverlayData()
+                val shouldShowOverlay = !hasCompleteData ||
+                    detectionState.shouldShowOverlay(analysis.input)
                 val overlayUpdated = if (shouldShowOverlay) {
                     startDecisionOverlay(result)
                 } else {
                     false
                 }
-                if (overlayUpdated) {
+                if (overlayUpdated && hasCompleteData) {
                     detectionState.markOverlayShown(analysis.input)
                 }
                 publishStatus(
-                    status = ScreenCaptureMonitorStatus.OFFER_DETECTED,
+                    status = if (hasCompleteData) {
+                        ScreenCaptureMonitorStatus.OFFER_DETECTED
+                    } else {
+                        ScreenCaptureMonitorStatus.INCOMPLETE_DATA
+                    },
                     recognizedText = rawText,
                     ocrStatus = OcrStatus.TEXT_DETECTED,
                     decisionResult = result,
@@ -254,20 +255,6 @@ class ScreenCaptureMonitorService : Service() {
                 )
             }
         }
-    }
-
-    private fun markIncompleteOffer(
-        rawText: String?,
-        result: TripDecisionResult
-    ) {
-        publishStatus(
-            status = ScreenCaptureMonitorStatus.INCOMPLETE_DATA,
-            recognizedText = rawText,
-            ocrStatus = OcrStatus.TEXT_DETECTED,
-            errorMessage = "Datos incompletos para mostrar overlay.",
-            decisionResult = result,
-            overlayUpdated = false
-        )
     }
 
     private fun markNoOffer(rawText: String?, ocrStatus: OcrStatus) {
@@ -443,7 +430,7 @@ class ScreenCaptureMonitorService : Service() {
         private const val NOTIFICATION_CHANNEL_ID = "screen_capture_monitor_service"
         private const val NOTIFICATION_ID = 4301
         private const val STOP_REQUEST_CODE = 4302
-        private const val CAPTURE_INTERVAL_MILLIS = 2_000L
+        private const val CAPTURE_INTERVAL_MILLIS = 1_000L
         private const val NO_OFFER_STATUS_THRESHOLD = 2
         private const val IMAGE_BUFFER_SIZE = 2
         private const val FALLBACK_CAPTURE_SIZE = 1

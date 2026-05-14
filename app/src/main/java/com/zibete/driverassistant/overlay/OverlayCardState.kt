@@ -24,6 +24,7 @@ data class OverlayCardState(
                 totalKmText = "${result.totalKm.toDisplayNumber()} km",
                 shortReason = result.rejectionReasons.firstOrNull()
                     ?: result.reviewReasons.firstOrNull()
+                    ?: if (!result.hasCompleteOverlayData()) "Datos incompletos" else null
             )
         }
 

@@ -314,7 +314,11 @@ class MainViewModel(
                 "Oferta ya mostrada; no se duplico el overlay"
             }
             status == ScreenCaptureMonitorStatus.INCOMPLETE_DATA -> {
-                "Datos incompletos: no se mostro overlay"
+                if (overlayUpdated) {
+                    "Modo diagnostico: overlay con datos incompletos"
+                } else {
+                    "Datos incompletos: no se mostro overlay"
+                }
             }
             status == ScreenCaptureMonitorStatus.NO_OFFER_DETECTED -> {
                 "No se detecto oferta en los ultimos ciclos"

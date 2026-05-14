@@ -33,6 +33,21 @@ class OverlayCardStateTest {
     }
 
     @Test
+    fun fromDecisionResultShowsIncompleteDataReasonWhenNoReasonExists() {
+        val state = OverlayCardState.fromDecisionResult(
+            decisionResult(
+                fareAmount = null,
+                totalKm = null,
+                totalMinutes = null,
+                arsPerKm = null,
+                arsPerHour = null
+            )
+        )
+
+        assertEquals("Datos incompletos", state.shortReason)
+    }
+
+    @Test
     fun completeOverlayDataRequiresAllDisplayedMetrics() {
         assertTrue(
             decisionResult(
