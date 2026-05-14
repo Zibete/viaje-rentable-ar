@@ -1,5 +1,6 @@
 package com.zibete.driverassistant.ui
 
+import android.app.Activity
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -40,6 +41,8 @@ import com.zibete.driverassistant.calculator.DriverDecision
 import com.zibete.driverassistant.calculator.TripDecisionResult
 import com.zibete.driverassistant.capture.ScreenCaptureFrameService
 import com.zibete.driverassistant.capture.ScreenCaptureManager
+import com.zibete.driverassistant.capture.ScreenCaptureMonitorResult
+import com.zibete.driverassistant.capture.ScreenCaptureMonitorService
 import com.zibete.driverassistant.config.DriverConfig
 import com.zibete.driverassistant.overlay.DriverDecisionOverlayService
 import com.zibete.driverassistant.overlay.OverlayCardState
@@ -71,6 +74,25 @@ fun MainScreen(
                 data = result.data
             )
         )
+    }
+    val monitorLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val data = result.data
+        if (result.resultCode == Activity.RESULT_OK && data != null) {
+            val intent = ScreenCaptureMonitorService.buildStartIntent(
+                context = context,
+                resultCode = result.resultCode,
+                resultData = data
+            )
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                context.startForegroundService(intent)
+            } else {
+                context.startService(intent)
+            }
+        } else {
+            resolvedViewModel.markMonitorPermissionDenied()
+        }
     }
     val lifecycleOwner = LocalLifecycleOwner.current
 
@@ -113,6 +135,29 @@ fun MainScreen(
         }
     }
 
+    DisposableEffect(context) {
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(receiverContext: Context?, intent: Intent?) {
+                if (intent?.action == ScreenCaptureMonitorService.ACTION_MONITOR_RESULT) {
+                    resolvedViewModel.updateScreenCaptureMonitor(
+                        ScreenCaptureMonitorResult.fromIntent(intent)
+                    )
+                }
+            }
+        }
+        val filter = IntentFilter(ScreenCaptureMonitorService.ACTION_MONITOR_RESULT)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            context.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            @Suppress("DEPRECATION")
+            context.registerReceiver(receiver, filter)
+        }
+
+        onDispose {
+            context.unregisterReceiver(receiver)
+        }
+    }
+
     MainScreenContent(
         uiState = uiState,
         overlayActionsEnabled = uiState.overlayPermissionStatus == "Otorgado",
@@ -134,6 +179,14 @@ fun MainScreen(
             resolvedViewModel.updateScreenCaptureSession(screenCaptureManager.captureOnce())
         },
         onAnalyzeOcr = resolvedViewModel::analyzeLastRecognizedText,
+        onStartMonitoring = {
+            resolvedViewModel.markMonitorWaitingPermission()
+            monitorLauncher.launch(screenCaptureManager.buildPermissionIntent())
+        },
+        onStopMonitoring = {
+            context.stopService(Intent(context, ScreenCaptureMonitorService::class.java))
+            resolvedViewModel.markMonitorStopped()
+        },
         onStartService = {
             val overlayState = resolvedViewModel.runSimulatedTripDecision()
             startDecisionOverlay(
@@ -181,6 +234,8 @@ fun MainScreenContent(
     onStopScreenCapture: () -> Unit,
     onCaptureFrame: () -> Unit,
     onAnalyzeOcr: () -> Unit,
+    onStartMonitoring: () -> Unit,
+    onStopMonitoring: () -> Unit,
     onStartService: () -> Unit,
     onStopService: () -> Unit,
     onRunSimulatedDecision: () -> Unit,
@@ -207,6 +262,7 @@ fun MainScreenContent(
             StatusSection(uiState)
             ForegroundServiceInfoSection(uiState.serviceStatus)
             ScreenCaptureInfoSection(uiState)
+            MonitorInfoSection(uiState)
             OcrInfoSection(uiState)
 
             Row(
@@ -246,6 +302,24 @@ fun MainScreenContent(
                 onClick = onStopScreenCapture
             ) {
                 Text("Detener captura")
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Button(
+                    modifier = Modifier.weight(1f),
+                    onClick = onStartMonitoring
+                ) {
+                    Text("Iniciar monitoreo")
+                }
+                OutlinedButton(
+                    modifier = Modifier.weight(1f),
+                    onClick = onStopMonitoring
+                ) {
+                    Text("Detener monitoreo")
+                }
             }
 
             Row(
@@ -398,6 +472,32 @@ private fun ScreenCaptureInfoSection(uiState: MainUiState) {
 }
 
 @Composable
+private fun MonitorInfoSection(uiState: MainUiState) {
+    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Text(
+                text = "Monitoreo",
+                style = MaterialTheme.typography.titleMedium
+            )
+            Text("Estado: ${uiState.monitorStatus}")
+            uiState.monitorOverlayStatus?.let { status ->
+                Text(status)
+            }
+            uiState.monitorLastRecognizedText?.takeIf { it.isNotBlank() }?.let { text ->
+                Text("Ultimo OCR monitoreado:")
+                Text(text)
+            }
+            uiState.monitorErrorMessage?.let { errorMessage ->
+                Text("Detalle: $errorMessage")
+            }
+        }
+    }
+}
+
+@Composable
 private fun OcrInfoSection(uiState: MainUiState) {
     Card {
         Column(
@@ -510,6 +610,9 @@ fun MainScreenPreview() {
         lastCapturedFrameTimestamp = 1_700_000_000_000L,
         ocrStatus = "Texto detectado",
         lastRecognizedText = "ARS 5.127\n41 min\n8.0 km",
+        monitorStatus = "Oferta detectada",
+        monitorLastRecognizedText = "Uber ARS 5.127\n41 min\n8.0 km",
+        monitorOverlayStatus = "Overlay actualizado con oferta detectada",
         serviceStatus = "Ejecutando",
         decisionStatusMessage = "Decision OCR calculada con datos completos",
         lastConfig = DriverConfig.default(),
@@ -535,6 +638,8 @@ fun MainScreenPreview() {
             onStopScreenCapture = {},
             onCaptureFrame = {},
             onAnalyzeOcr = {},
+            onStartMonitoring = {},
+            onStopMonitoring = {},
             onStartService = {},
             onStopService = {},
             onRunSimulatedDecision = {},
