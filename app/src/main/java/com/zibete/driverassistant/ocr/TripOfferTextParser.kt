@@ -88,15 +88,32 @@ class TripOfferTextParser(
     }
 
     private fun parseUberStructuredFields(rawText: String): StructuredTripFields {
-        val pickupMatch = uberPickupRegex.find(rawText)
-        val tripMatch = uberTripRegex.find(rawText)
+        val pickupMatch = parseFirstTimeDistanceMatch(rawText, uberPickupRegexes)
+        val tripMatch = parseFirstTimeDistanceMatch(rawText, uberTripRegexes)
 
         return StructuredTripFields(
-            pickupMinutes = pickupMatch?.groupValues?.getOrNull(1)?.toDecimalOrNull(),
-            pickupKm = pickupMatch?.groupValues?.getOrNull(2)?.toDecimalOrNull(),
-            tripMinutes = tripMatch?.groupValues?.getOrNull(1)?.toDecimalOrNull(),
-            tripKm = tripMatch?.groupValues?.getOrNull(2)?.toDecimalOrNull()
+            pickupMinutes = pickupMatch?.minutes,
+            pickupKm = pickupMatch?.km,
+            tripMinutes = tripMatch?.minutes,
+            tripKm = tripMatch?.km
         )
+    }
+
+    private fun parseFirstTimeDistanceMatch(
+        rawText: String,
+        regexes: List<Regex>
+    ): TimeDistanceMatch? {
+        return regexes.firstNotNullOfOrNull { regex ->
+            regex.find(rawText)?.let { match ->
+                val minutes = match.groupValues.getOrNull(1)?.toDecimalOrNull()
+                val km = match.groupValues.getOrNull(2)?.toDecimalOrNull()
+                if (minutes != null && km != null) {
+                    TimeDistanceMatch(minutes = minutes, km = km)
+                } else {
+                    null
+                }
+            }
+        }
     }
 
     private fun parseTimes(rawText: String): List<Double> {
@@ -158,7 +175,15 @@ class TripOfferTextParser(
         }
     }
 
+    private data class TimeDistanceMatch(
+        val minutes: Double,
+        val km: Double
+    )
+
     private companion object {
+        private const val TIME_DISTANCE_PATTERN =
+            """(\d+(?:[.,]\d+)?)\s*min(?:utos)?\s*(?:\(\s*)?(\d+(?:[.,]\d+)?)\s*km(?:\s*\))?"""
+
         val trailingArsFareRegex = Regex(
             pattern = """(?i)\b(\d{1,3}(?:[.,]\d{3})+|\d+(?:[.,]\d{1,2})?)\s*ARS\b"""
         )
@@ -177,11 +202,21 @@ class TripOfferTextParser(
         val minuteRegex = Regex(
             pattern = """(?i)\b(\d+(?:[.,]\d+)?)\s*min(?:utos)?\b"""
         )
-        val uberPickupRegex = Regex(
-            pattern = """(?i)\bA\s+(\d+(?:[.,]\d+)?)\s*min(?:utos)?\s*\(\s*(\d+(?:[.,]\d+)?)\s*km\s*\)\s*de\s+distancia\b"""
+        val uberPickupRegexes = listOf(
+            Regex(
+                pattern = """(?i)\bA\s+$TIME_DISTANCE_PATTERN(?:\s*de\s+distancia)?\b"""
+            ),
+            Regex(
+                pattern = """(?i)\b$TIME_DISTANCE_PATTERN\s*de\s+distancia\b"""
+            )
         )
-        val uberTripRegex = Regex(
-            pattern = """(?i)\bViaje\s+de\s+(\d+(?:[.,]\d+)?)\s*min(?:utos)?\s*\(\s*(\d+(?:[.,]\d+)?)\s*km\s*\)"""
+        val uberTripRegexes = listOf(
+            Regex(
+                pattern = """(?i)\bViaje(?:\s+de)?\s+$TIME_DISTANCE_PATTERN\b"""
+            ),
+            Regex(
+                pattern = """(?is)\bViaje\b.{0,40}?\b$TIME_DISTANCE_PATTERN\b"""
+            )
         )
     }
 }
