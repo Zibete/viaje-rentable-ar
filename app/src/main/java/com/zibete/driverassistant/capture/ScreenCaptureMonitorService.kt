@@ -26,6 +26,7 @@ import androidx.core.app.NotificationCompat
 import com.zibete.driverassistant.calculator.TripDecisionResult
 import com.zibete.driverassistant.config.DataStoreDriverConfigRepository
 import com.zibete.driverassistant.config.DriverConfig
+import com.zibete.driverassistant.debug.DriverAssistantDebugLogger
 import com.zibete.driverassistant.ocr.MlKitScreenTextRecognizer
 import com.zibete.driverassistant.ocr.OcrStatus
 import com.zibete.driverassistant.ocr.TripOfferAnalysisResult
@@ -204,6 +205,9 @@ class ScreenCaptureMonitorService : Service() {
 
         textRecognizer.recognizeText(bitmap) { ocrResult ->
             bitmap.recycle()
+            DriverAssistantDebugLogger.log("monitor ocrStatus", ocrResult.status)
+            DriverAssistantDebugLogger.log("monitor raw OCR", ocrResult.rawText)
+            DriverAssistantDebugLogger.log("monitor ocrError", ocrResult.errorMessage)
             when (ocrResult.status) {
                 OcrStatus.TEXT_DETECTED -> analyzeRecognizedText(ocrResult.rawText)
                 OcrStatus.NO_TEXT -> markNoOffer(ocrResult.rawText, ocrResult.status)
@@ -225,9 +229,16 @@ class ScreenCaptureMonitorService : Service() {
     }
 
     private fun analyzeRecognizedText(rawText: String?) {
+        DriverAssistantDebugLogger.log("monitor analyze rawText", rawText)
         when (val analysis = decisionPipeline.analyzeRecognizedText(rawText, currentConfig)) {
-            TripOfferAnalysisResult.NoText -> markNoOffer(rawText, OcrStatus.NO_TEXT)
-            TripOfferAnalysisResult.NoTripDetected -> markNoOffer(rawText, OcrStatus.TEXT_DETECTED)
+            TripOfferAnalysisResult.NoText -> {
+                DriverAssistantDebugLogger.log("monitor analysis", "NoText")
+                markNoOffer(rawText, OcrStatus.NO_TEXT)
+            }
+            TripOfferAnalysisResult.NoTripDetected -> {
+                DriverAssistantDebugLogger.log("monitor analysis", "NoTripDetected")
+                markNoOffer(rawText, OcrStatus.TEXT_DETECTED)
+            }
             is TripOfferAnalysisResult.DecisionReady -> {
                 noOfferCycles = 0
                 val result = analysis.result
@@ -242,6 +253,11 @@ class ScreenCaptureMonitorService : Service() {
                 if (overlayUpdated && hasCompleteData) {
                     detectionState.markOverlayShown(analysis.input)
                 }
+                DriverAssistantDebugLogger.log(
+                    "monitor decision summary",
+                    "input=${analysis.input}, result=$result, hasCompleteData=$hasCompleteData, " +
+                        "shouldShowOverlay=$shouldShowOverlay, overlayUpdated=$overlayUpdated"
+                )
                 publishStatus(
                     status = if (hasCompleteData) {
                         ScreenCaptureMonitorStatus.OFFER_DETECTED
