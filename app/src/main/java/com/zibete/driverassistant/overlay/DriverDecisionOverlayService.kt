@@ -14,10 +14,12 @@ import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.IBinder
 import android.provider.Settings
+import android.text.TextUtils
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
+import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.core.app.NotificationCompat
@@ -102,49 +104,104 @@ class DriverDecisionOverlayService : Service() {
     private fun buildOverlayView(state: OverlayCardState): View {
         val accentColor = state.decision.toAccentColor()
         val background = GradientDrawable().apply {
-            cornerRadius = 28f
-            setColor(Color.argb(238, 20, 24, 28))
-            setStroke(4, accentColor)
+            cornerRadius = 22f
+            setColor(Color.argb(242, 18, 22, 26))
+            setStroke(3, accentColor)
         }
 
         return LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(28, 22, 28, 22)
+            setPadding(22, 18, 22, 18)
             this.background = background
-            elevation = 12f
-            minimumWidth = 260
+            elevation = 14f
+            minimumWidth = 250
 
             addView(
                 overlayText(
                     text = state.decision.toSpanishLabel(),
-                    sizeSp = 20f,
+                    sizeSp = 18f,
                     color = accentColor,
                     style = Typeface.BOLD
                 )
             )
-            addView(overlayText(text = state.fareText, sizeSp = 24f, style = Typeface.BOLD))
-            addView(
-                overlayText(
-                    text = "${state.arsPerHourText}/h - ${state.arsPerKmText}/km",
-                    sizeSp = 14f
-                )
-            )
-            addView(
-                overlayText(
-                    text = "${state.totalTimeText} - ${state.totalKmText}",
-                    sizeSp = 14f
-                )
-            )
+            addView(overlayText(text = state.fareText, sizeSp = 28f, style = Typeface.BOLD))
+            addView(metricRow("${state.arsPerKmText}/km", "${state.arsPerHourText}/h"))
+            addView(metricRow(state.totalTimeText, state.totalKmText))
 
             state.shortReason?.takeIf { it.isNotBlank() }?.let { reason ->
-                addView(
-                    overlayText(
-                        text = reason,
-                        sizeSp = 13f,
-                        color = Color.rgb(230, 234, 238)
-                    )
-                )
+                addView(separator(accentColor))
+                addView(reasonText(reason))
             }
+        }
+    }
+
+    private fun metricRow(
+        leftText: String,
+        rightText: String
+    ): View {
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(0, 5, 0, 0)
+            addView(
+                overlayText(
+                    text = leftText,
+                    sizeSp = 14f,
+                    color = Color.rgb(238, 242, 246),
+                    style = Typeface.BOLD
+                )
+            )
+            addView(
+                overlayText(
+                    text = "  -  ",
+                    sizeSp = 14f,
+                    color = Color.rgb(178, 188, 198)
+                )
+            )
+            addView(
+                overlayText(
+                    text = rightText,
+                    sizeSp = 14f,
+                    color = Color.rgb(238, 242, 246),
+                    style = Typeface.BOLD
+                )
+            )
+        }
+    }
+
+    private fun separator(accentColor: Int): View {
+        return FrameLayout(this).apply {
+            setPadding(0, 8, 0, 4)
+            addView(
+                View(context).apply {
+                    background = GradientDrawable().apply {
+                        setColor(
+                            Color.argb(
+                                150,
+                                Color.red(accentColor),
+                                Color.green(accentColor),
+                                Color.blue(accentColor)
+                            )
+                        )
+                        cornerRadius = 2f
+                    }
+                },
+                FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT,
+                    2
+                )
+            )
+        }
+    }
+
+    private fun reasonText(reason: String): TextView {
+        return overlayText(
+            text = reason,
+            sizeSp = 12f,
+            color = Color.rgb(230, 234, 238)
+        ).apply {
+            maxLines = 2
+            maxWidth = 280
+            ellipsize = TextUtils.TruncateAt.END
         }
     }
 
@@ -218,7 +275,7 @@ class DriverDecisionOverlayService : Service() {
             setTextColor(color)
             typeface = Typeface.create(Typeface.DEFAULT, style)
             includeFontPadding = false
-            setPadding(0, 3, 0, 3)
+            setPadding(0, 2, 0, 2)
         }
     }
 
