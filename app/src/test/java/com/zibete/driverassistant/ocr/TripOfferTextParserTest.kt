@@ -306,6 +306,44 @@ class TripOfferTextParserTest {
     }
 
     @Test
+    fun parsesUberOfferWithJoinedTripPrefixVariants() {
+        listOf(
+            "Viaje26 min (11.9 km)",
+            "Viaje de26 min (11.9 km)",
+            "Viajede 26 min (11.9 km)"
+        ).forEach { tripLine ->
+            assertParsesUberMetrics(tripLine = tripLine)
+        }
+    }
+
+    @Test
+    fun parsesUberOfferWithOcrDistanceNumberVariants() {
+        listOf(
+            "Viaje de 26 min (1l.9 km)",
+            "Viaje de 26 min (1I.9 km)",
+            "Viaje de 26 min (1|.9 km)",
+            "Viaje de 26 min (11.9 k m)",
+            "Viaje de 26 min (11.9 krn)",
+            "Viaje de 26 min (11.9 kin)"
+        ).forEach { tripLine ->
+            assertParsesUberMetrics(tripLine = tripLine)
+        }
+
+        assertParsesUberMetrics(pickupLine = "A 3 min (l.3 km) de distancia")
+    }
+
+    @Test
+    fun parsesUberOfferWithOcrMinuteUnitVariants() {
+        listOf(
+            "A 3 mn (1.3 km) de distancia",
+            "A 3 rnin (1.3 km) de distancia",
+            "A 3 m in (1.3 km) de distancia"
+        ).forEach { pickupLine ->
+            assertParsesUberMetrics(pickupLine = pickupLine)
+        }
+    }
+
+    @Test
     fun ignoresOldOverlayWhenParsingCurrentUberOffer() {
         val result = parser.parse(
             """
@@ -328,5 +366,27 @@ class TripOfferTextParserTest {
         assertEquals(1.3, result?.pickupKm ?: 0.0, 0.001)
         assertEquals(26.0, result?.tripMinutes ?: 0.0, 0.001)
         assertEquals(11.9, result?.tripKm ?: 0.0, 0.001)
+    }
+
+    private fun assertParsesUberMetrics(
+        pickupLine: String = "A3 min (1.3 km) de distancia",
+        tripLine: String = "Viaje de 26 min (11.9 km)"
+    ) {
+        val result = parser.parse(
+            """
+            UberX
+            5.472 ARS
+            $pickupLine
+            $tripLine
+            """.trimIndent()
+        )
+
+        assertNotNull(result)
+        assertEquals(5472.0, result?.fareAmount ?: 0.0, 0.001)
+        assertEquals(3.0, result?.pickupMinutes ?: 0.0, 0.001)
+        assertEquals(1.3, result?.pickupKm ?: 0.0, 0.001)
+        assertEquals(26.0, result?.tripMinutes ?: 0.0, 0.001)
+        assertEquals(11.9, result?.tripKm ?: 0.0, 0.001)
+        assertEquals("uber", result?.platform)
     }
 }

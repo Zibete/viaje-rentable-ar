@@ -126,8 +126,8 @@ class TripOfferTextParser(
     ): TimeDistanceMatch? {
         return regexes.firstNotNullOfOrNull { regex ->
             regex.find(rawText)?.let { match ->
-                val minutes = match.groupValues.getOrNull(1)?.toDecimalOrNull()
-                val km = match.groupValues.getOrNull(2)?.toDecimalOrNull()
+                val minutes = match.groupValues.getOrNull(1)?.toOcrMetricDecimalOrNull()
+                val km = match.groupValues.getOrNull(2)?.toOcrMetricDecimalOrNull()
                 if (minutes != null && km != null) {
                     TimeDistanceMatch(minutes = minutes, km = km)
                 } else {
@@ -182,6 +182,13 @@ class TripOfferTextParser(
         return replace(",", ".").toDoubleOrNull()
     }
 
+    private fun String.toOcrMetricDecimalOrNull(): Double? {
+        return replace('l', '1')
+            .replace('I', '1')
+            .replace('|', '1')
+            .toDecimalOrNull()
+    }
+
     private data class StructuredTripFields(
         val pickupKm: Double? = null,
         val tripKm: Double? = null,
@@ -203,7 +210,7 @@ class TripOfferTextParser(
 
     private companion object {
         private const val TIME_DISTANCE_PATTERN =
-            """(\d+(?:[.,]\d+)?)\s*min(?:utos)?\s*(?:\(\s*)?(\d+(?:[.,]\d+)?)\s*km(?:\s*\))?"""
+            """([0-9lI|]+(?:[.,][0-9lI|]+)?)\s*(?:m\s*(?:in|n|inutos)?|rnin)\s*(?:\(\s*)?([0-9lI|]+(?:[.,][0-9lI|]+)?)\s*k\s*(?:m|rn|in)(?:\s*\))?"""
 
         val trailingArsFareRegex = Regex(
             pattern = """(?i)\b(\d{1,3}(?:[.,]\d{3})+|\d+(?:[.,]\d{1,2})?)\s*ARS\b"""
@@ -233,10 +240,10 @@ class TripOfferTextParser(
         )
         val uberTripRegexes = listOf(
             Regex(
-                pattern = """(?i)\bViaje(?:\s+de)?\s+$TIME_DISTANCE_PATTERN\b"""
+                pattern = """(?i)\bViaje(?:\s*de)?\s*$TIME_DISTANCE_PATTERN\b"""
             ),
             Regex(
-                pattern = """(?is)\bViaje\b.{0,40}?\b$TIME_DISTANCE_PATTERN\b"""
+                pattern = """(?is)\bViaje(?:\s*de)?\b.{0,40}?\b$TIME_DISTANCE_PATTERN\b"""
             )
         )
     }
