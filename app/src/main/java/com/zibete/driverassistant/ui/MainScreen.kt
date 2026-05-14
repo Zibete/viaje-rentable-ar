@@ -22,6 +22,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -32,6 +33,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -44,6 +46,8 @@ import com.zibete.driverassistant.capture.ScreenCaptureManager
 import com.zibete.driverassistant.capture.ScreenCaptureMonitorResult
 import com.zibete.driverassistant.capture.ScreenCaptureMonitorService
 import com.zibete.driverassistant.config.DriverConfig
+import com.zibete.driverassistant.config.DriverConfigFormField
+import com.zibete.driverassistant.config.DriverConfigFormState
 import com.zibete.driverassistant.overlay.DriverDecisionOverlayService
 import com.zibete.driverassistant.overlay.OverlayCardState
 import com.zibete.driverassistant.overlay.OverlayPermissionHelper
@@ -53,6 +57,7 @@ import java.util.Locale
 import kotlin.math.roundToInt
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.text.KeyboardOptions
 
 @Composable
 fun MainScreen(
@@ -220,7 +225,8 @@ fun MainScreen(
                 )
             }
         },
-        onIncreaseMinArsPerKm = resolvedViewModel::increaseMinArsPerKmPlaceholder,
+        onConfigInputChange = resolvedViewModel::updateDriverConfigInput,
+        onSaveConfig = resolvedViewModel::saveDriverConfigForm,
         onResetConfig = resolvedViewModel::resetConfigToDefaults
     )
 }
@@ -240,7 +246,8 @@ fun MainScreenContent(
     onStopService: () -> Unit,
     onRunSimulatedDecision: () -> Unit,
     onShowLastRealDecisionOverlay: () -> Unit,
-    onIncreaseMinArsPerKm: () -> Unit,
+    onConfigInputChange: (DriverConfigFormField, String) -> Unit,
+    onSaveConfig: () -> Unit,
     onResetConfig: () -> Unit
 ) {
     Surface(
@@ -357,27 +364,16 @@ fun MainScreenContent(
                 Text("Mostrar overlay con ultima decision real")
             }
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                OutlinedButton(
-                    modifier = Modifier.weight(1f),
-                    onClick = onIncreaseMinArsPerKm
-                ) {
-                    Text("Subir min ${'$'}/km")
-                }
-                OutlinedButton(
-                    modifier = Modifier.weight(1f),
-                    onClick = onResetConfig
-                ) {
-                    Text("Restablecer config")
-                }
-            }
-
             DecisionSection(
                 result = uiState.lastDecision,
                 statusMessage = uiState.decisionStatusMessage
+            )
+            EditableConfigSection(
+                form = uiState.configForm,
+                statusMessage = uiState.configStatusMessage,
+                onConfigInputChange = onConfigInputChange,
+                onSaveConfig = onSaveConfig,
+                onResetConfig = onResetConfig
             )
             ConfigSection(uiState.lastConfig)
         }
@@ -555,6 +551,112 @@ private fun DecisionSection(
 }
 
 @Composable
+private fun EditableConfigSection(
+    form: DriverConfigFormState,
+    statusMessage: String?,
+    onConfigInputChange: (DriverConfigFormField, String) -> Unit,
+    onSaveConfig: () -> Unit,
+    onResetConfig: () -> Unit
+) {
+    Card {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Text(
+                text = "Editar configuracion",
+                style = MaterialTheme.typography.titleMedium
+            )
+            ConfigNumberField(
+                label = "Minimo ${'$'}/km",
+                value = form.minArsPerKm,
+                field = DriverConfigFormField.MIN_ARS_PER_KM,
+                onConfigInputChange = onConfigInputChange
+            )
+            ConfigNumberField(
+                label = "Minimo ${'$'}/h",
+                value = form.minArsPerHour,
+                field = DriverConfigFormField.MIN_ARS_PER_HOUR,
+                onConfigInputChange = onConfigInputChange
+            )
+            ConfigNumberField(
+                label = "Ganancia minima",
+                value = form.minNetProfit,
+                field = DriverConfigFormField.MIN_NET_PROFIT,
+                onConfigInputChange = onConfigInputChange
+            )
+            ConfigNumberField(
+                label = "Costo por km",
+                value = form.costPerKm,
+                field = DriverConfigFormField.COST_PER_KM,
+                onConfigInputChange = onConfigInputChange
+            )
+            ConfigNumberField(
+                label = "Costo por minuto",
+                value = form.costPerMinute,
+                field = DriverConfigFormField.COST_PER_MINUTE,
+                onConfigInputChange = onConfigInputChange
+            )
+            ConfigNumberField(
+                label = "Pickup maximo km",
+                value = form.maxPickupKm,
+                field = DriverConfigFormField.MAX_PICKUP_KM,
+                onConfigInputChange = onConfigInputChange
+            )
+            ConfigNumberField(
+                label = "Pickup maximo min",
+                value = form.maxPickupMinutes,
+                field = DriverConfigFormField.MAX_PICKUP_MINUTES,
+                onConfigInputChange = onConfigInputChange
+            )
+            ConfigNumberField(
+                label = "Tolerancia revision %",
+                value = form.reviewTolerancePercent,
+                field = DriverConfigFormField.REVIEW_TOLERANCE_PERCENT,
+                onConfigInputChange = onConfigInputChange
+            )
+            statusMessage?.let { message ->
+                Text(message)
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Button(
+                    modifier = Modifier.weight(1f),
+                    onClick = onSaveConfig
+                ) {
+                    Text("Guardar config")
+                }
+                OutlinedButton(
+                    modifier = Modifier.weight(1f),
+                    onClick = onResetConfig
+                ) {
+                    Text("Restablecer config")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ConfigNumberField(
+    label: String,
+    value: String,
+    field: DriverConfigFormField,
+    onConfigInputChange: (DriverConfigFormField, String) -> Unit
+) {
+    OutlinedTextField(
+        modifier = Modifier.fillMaxWidth(),
+        value = value,
+        onValueChange = { onConfigInputChange(field, it) },
+        label = { Text(label) },
+        singleLine = true,
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
+    )
+}
+
+@Composable
 private fun ConfigSection(config: DriverConfig?) {
     Card {
         Column(
@@ -616,6 +718,7 @@ fun MainScreenPreview() {
         serviceStatus = "Ejecutando",
         decisionStatusMessage = "Decision OCR calculada con datos completos",
         lastConfig = DriverConfig.default(),
+        configForm = DriverConfigFormState.fromConfig(DriverConfig.default()),
         lastDecision = TripDecisionResult(
             decision = DriverDecision.ACCEPT,
             fareAmount = 5127.0,
@@ -644,7 +747,8 @@ fun MainScreenPreview() {
             onStopService = {},
             onRunSimulatedDecision = {},
             onShowLastRealDecisionOverlay = {},
-            onIncreaseMinArsPerKm = {},
+            onConfigInputChange = { _, _ -> },
+            onSaveConfig = {},
             onResetConfig = {}
         )
     }
