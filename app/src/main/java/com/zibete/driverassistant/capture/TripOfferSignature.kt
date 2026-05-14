@@ -1,35 +1,29 @@
 package com.zibete.driverassistant.capture
 
-import com.zibete.driverassistant.calculator.TripDecisionResult
+import com.zibete.driverassistant.calculator.TripOfferInput
 
 data class TripOfferSignature(
     val fareAmount: Double?,
-    val totalKm: Double?,
-    val totalMinutes: Double?,
-    val normalizedTextHash: Int
+    val pickupKm: Double?,
+    val tripKm: Double?,
+    val pickupMinutes: Double?,
+    val tripMinutes: Double?,
+    val platform: String?
 ) {
     companion object {
-        fun fromDecisionResult(
-            result: TripDecisionResult,
-            rawText: String?
-        ): TripOfferSignature {
+        fun fromTripOfferInput(input: TripOfferInput): TripOfferSignature {
             return TripOfferSignature(
-                fareAmount = result.fareAmount?.roundForSignature(),
-                totalKm = result.totalKm?.roundForSignature(),
-                totalMinutes = result.totalMinutes?.roundForSignature(),
-                normalizedTextHash = rawText.normalizeForSignature().hashCode()
+                fareAmount = input.fareAmount?.roundForSignature(),
+                pickupKm = input.pickupKm?.roundForSignature(),
+                tripKm = input.tripKm?.roundForSignature(),
+                pickupMinutes = input.pickupMinutes?.roundForSignature(),
+                tripMinutes = input.tripMinutes?.roundForSignature(),
+                platform = input.platform?.trim()?.lowercase()
             )
         }
 
         private fun Double.roundForSignature(): Double {
             return kotlin.math.round(this * 10.0) / 10.0
-        }
-
-        private fun String?.normalizeForSignature(): String {
-            return orEmpty()
-                .lowercase()
-                .replace(Regex("""\s+"""), " ")
-                .trim()
         }
     }
 }

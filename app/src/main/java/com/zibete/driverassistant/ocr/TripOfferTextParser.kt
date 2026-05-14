@@ -15,17 +15,44 @@ class TripOfferTextParser(
         } else {
             StructuredTripFields()
         }
-        val genericDistances = distanceRegex.findAll(sanitizedText)
-            .mapNotNull { it.groupValues[1].toDecimalOrNull() }
-            .toList()
-        val genericTimes = parseTimes(sanitizedText)
-        val fare = parseFare(sanitizedText)
-        val pickupKm = uberStructuredFields.pickupKm
-            ?: genericDistances.getOrNull(1)?.let { genericDistances.firstOrNull() }
-        val tripKm = uberStructuredFields.tripKm ?: genericDistances.lastOrNull()
-        val pickupMinutes = uberStructuredFields.pickupMinutes
-            ?: genericTimes.getOrNull(1)?.let { genericTimes.firstOrNull() }
-        val tripMinutes = uberStructuredFields.tripMinutes ?: genericTimes.lastOrNull()
+        val hasUberStructuredFields = platform == "uber" && uberStructuredFields.hasAnyField()
+        val genericDistances = if (hasUberStructuredFields) {
+            emptyList()
+        } else {
+            distanceRegex.findAll(sanitizedText)
+                .mapNotNull { it.groupValues[1].toDecimalOrNull() }
+                .toList()
+        }
+        val genericTimes = if (hasUberStructuredFields) {
+            emptyList()
+        } else {
+            parseTimes(sanitizedText)
+        }
+        val fare = if (hasUberStructuredFields) {
+            parseUberStructuredFare(sanitizedText)
+        } else {
+            parseFare(sanitizedText)
+        }
+        val pickupKm = if (hasUberStructuredFields) {
+            uberStructuredFields.pickupKm
+        } else {
+            genericDistances.getOrNull(1)?.let { genericDistances.firstOrNull() }
+        }
+        val tripKm = if (hasUberStructuredFields) {
+            uberStructuredFields.tripKm
+        } else {
+            genericDistances.lastOrNull()
+        }
+        val pickupMinutes = if (hasUberStructuredFields) {
+            uberStructuredFields.pickupMinutes
+        } else {
+            genericTimes.getOrNull(1)?.let { genericTimes.firstOrNull() }
+        }
+        val tripMinutes = if (hasUberStructuredFields) {
+            uberStructuredFields.tripMinutes
+        } else {
+            genericTimes.lastOrNull()
+        }
 
         if (fare == null && pickupKm == null && tripKm == null && pickupMinutes == null && tripMinutes == null && platform == null) {
             return null
@@ -51,9 +78,13 @@ class TripOfferTextParser(
     }
 
     private fun parseFare(rawText: String): Double? {
-        return trailingArsFareRegex.find(rawText)?.groupValues?.get(1)?.toMoneyOrNull()
+        return parseUberStructuredFare(rawText)
             ?: currencyFareRegex.find(rawText)?.groupValues?.get(1)?.toMoneyOrNull()
             ?: pesosFareRegex.find(rawText)?.groupValues?.get(1)?.toMoneyOrNull()
+    }
+
+    private fun parseUberStructuredFare(rawText: String): Double? {
+        return trailingArsFareRegex.find(rawText)?.groupValues?.get(1)?.toMoneyOrNull()
     }
 
     private fun parseUberStructuredFields(rawText: String): StructuredTripFields {
@@ -118,7 +149,14 @@ class TripOfferTextParser(
         val tripKm: Double? = null,
         val pickupMinutes: Double? = null,
         val tripMinutes: Double? = null
-    )
+    ) {
+        fun hasAnyField(): Boolean {
+            return pickupKm != null ||
+                tripKm != null ||
+                pickupMinutes != null ||
+                tripMinutes != null
+        }
+    }
 
     private companion object {
         val trailingArsFareRegex = Regex(

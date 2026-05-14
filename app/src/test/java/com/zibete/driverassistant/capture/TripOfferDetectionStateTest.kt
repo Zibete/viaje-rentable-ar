@@ -1,7 +1,6 @@
 package com.zibete.driverassistant.capture
 
-import com.zibete.driverassistant.calculator.DriverDecision
-import com.zibete.driverassistant.calculator.TripDecisionResult
+import com.zibete.driverassistant.calculator.TripOfferInput
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
@@ -10,14 +9,10 @@ import org.junit.Test
 
 class TripOfferDetectionStateTest {
     @Test
-    fun signatureDoesNotChangeForSameOffer() {
-        val first = TripOfferSignature.fromDecisionResult(
-            result = decisionResult(),
-            rawText = "Uber ARS 5.127 41 min 8.0 km"
-        )
-        val second = TripOfferSignature.fromDecisionResult(
-            result = decisionResult(),
-            rawText = "uber   ars 5.127 41 min 8.0 km "
+    fun signatureDoesNotChangeForSameParsedOffer() {
+        val first = TripOfferSignature.fromTripOfferInput(offerInput())
+        val second = TripOfferSignature.fromTripOfferInput(
+            offerInput(rawText = "UberX\ntexto OCR con ruido distinto")
         )
 
         assertEquals(first, second)
@@ -25,108 +20,92 @@ class TripOfferDetectionStateTest {
 
     @Test
     fun signatureChangesWhenFareChanges() {
-        val first = TripOfferSignature.fromDecisionResult(
-            result = decisionResult(fareAmount = 5127.0),
-            rawText = "Uber ARS 5.127 41 min 8.0 km"
-        )
-        val second = TripOfferSignature.fromDecisionResult(
-            result = decisionResult(fareAmount = 6127.0),
-            rawText = "Uber ARS 6.127 41 min 8.0 km"
-        )
+        val first = TripOfferSignature.fromTripOfferInput(offerInput(fareAmount = 5127.0))
+        val second = TripOfferSignature.fromTripOfferInput(offerInput(fareAmount = 6127.0))
 
         assertNotEquals(first, second)
     }
 
     @Test
-    fun signatureChangesWhenDistanceChanges() {
-        val first = TripOfferSignature.fromDecisionResult(
-            result = decisionResult(totalKm = 8.0),
-            rawText = "Uber ARS 5.127 41 min 8.0 km"
-        )
-        val second = TripOfferSignature.fromDecisionResult(
-            result = decisionResult(totalKm = 9.0),
-            rawText = "Uber ARS 5.127 41 min 9.0 km"
-        )
+    fun signatureChangesWhenPickupDistanceChanges() {
+        val first = TripOfferSignature.fromTripOfferInput(offerInput(pickupKm = 1.0))
+        val second = TripOfferSignature.fromTripOfferInput(offerInput(pickupKm = 1.5))
+
+        assertNotEquals(first, second)
+    }
+
+    @Test
+    fun signatureChangesWhenTripDistanceChanges() {
+        val first = TripOfferSignature.fromTripOfferInput(offerInput(tripKm = 7.0))
+        val second = TripOfferSignature.fromTripOfferInput(offerInput(tripKm = 8.0))
 
         assertNotEquals(first, second)
     }
 
     @Test
     fun signatureChangesWhenMinutesChange() {
-        val first = TripOfferSignature.fromDecisionResult(
-            result = decisionResult(totalMinutes = 41.0),
-            rawText = "Uber ARS 5.127 41 min 8.0 km"
-        )
-        val second = TripOfferSignature.fromDecisionResult(
-            result = decisionResult(totalMinutes = 45.0),
-            rawText = "Uber ARS 5.127 45 min 8.0 km"
-        )
+        val first = TripOfferSignature.fromTripOfferInput(offerInput(tripMinutes = 36.0))
+        val second = TripOfferSignature.fromTripOfferInput(offerInput(tripMinutes = 40.0))
 
         assertNotEquals(first, second)
     }
 
     @Test
-    fun signatureChangesWhenRelevantTextChanges() {
-        val first = TripOfferSignature.fromDecisionResult(
-            result = decisionResult(),
-            rawText = "Uber ARS 5.127 41 min 8.0 km Palermo"
-        )
-        val second = TripOfferSignature.fromDecisionResult(
-            result = decisionResult(),
-            rawText = "Uber ARS 5.127 41 min 8.0 km Retiro"
-        )
+    fun signatureChangesWhenPlatformChanges() {
+        val first = TripOfferSignature.fromTripOfferInput(offerInput(platform = "uber"))
+        val second = TripOfferSignature.fromTripOfferInput(offerInput(platform = "didi"))
 
         assertNotEquals(first, second)
     }
 
     @Test
-    fun detectionStateSkipsDuplicateOverlayForSameOffer() {
+    fun detectionStateAllowsOnlyFirstOverlayAfterMarkingShown() {
         val state = TripOfferDetectionState()
-        val result = decisionResult()
+        val input = offerInput()
 
-        assertTrue(state.shouldShowOverlay(result, "Uber ARS 5.127 41 min 8.0 km"))
-        assertFalse(state.shouldShowOverlay(result, "uber   ars 5.127 41 min 8.0 km "))
+        assertTrue(state.shouldShowOverlay(input))
+        state.markOverlayShown(input)
+        assertFalse(state.shouldShowOverlay(input.copy(rawText = "ruido OCR distinto")))
     }
 
     @Test
     fun detectionStateAllowsOverlayAfterOfferChanges() {
         val state = TripOfferDetectionState()
+        val input = offerInput()
 
-        assertTrue(state.shouldShowOverlay(decisionResult(), "Uber ARS 5.127 41 min 8.0 km"))
-        assertTrue(
-            state.shouldShowOverlay(
-                decisionResult(fareAmount = 6127.0),
-                "Uber ARS 6.127 41 min 8.0 km"
-            )
-        )
+        assertTrue(state.shouldShowOverlay(input))
+        state.markOverlayShown(input)
+        assertTrue(state.shouldShowOverlay(input.copy(fareAmount = 6127.0)))
     }
 
     @Test
     fun detectionStateAllowsSameOfferAfterReset() {
         val state = TripOfferDetectionState()
-        val result = decisionResult()
+        val input = offerInput()
 
-        assertTrue(state.shouldShowOverlay(result, "Uber ARS 5.127 41 min 8.0 km"))
+        assertTrue(state.shouldShowOverlay(input))
+        state.markOverlayShown(input)
         state.reset()
-        assertTrue(state.shouldShowOverlay(result, "Uber ARS 5.127 41 min 8.0 km"))
+        assertTrue(state.shouldShowOverlay(input))
     }
 
-    private fun decisionResult(
+    private fun offerInput(
         fareAmount: Double = 5127.0,
-        totalKm: Double = 8.0,
-        totalMinutes: Double = 41.0
-    ): TripDecisionResult {
-        return TripDecisionResult(
-            decision = DriverDecision.ACCEPT,
+        pickupKm: Double = 1.0,
+        tripKm: Double = 7.0,
+        pickupMinutes: Double = 5.0,
+        tripMinutes: Double = 36.0,
+        platform: String? = "uber",
+        rawText: String? = "Uber ARS 5.127 5 min 1 km 36 min 7 km"
+    ): TripOfferInput {
+        return TripOfferInput(
             fareAmount = fareAmount,
-            arsPerKm = fareAmount / totalKm,
-            arsPerHour = fareAmount / (totalMinutes / 60.0),
-            estimatedCost = 3470.0,
-            estimatedNetProfit = fareAmount - 3470.0,
-            totalKm = totalKm,
-            totalMinutes = totalMinutes,
-            rejectionReasons = emptyList(),
-            reviewReasons = emptyList()
+            pickupKm = pickupKm,
+            tripKm = tripKm,
+            pickupMinutes = pickupMinutes,
+            tripMinutes = tripMinutes,
+            platform = platform,
+            rawText = rawText
         )
     }
 }

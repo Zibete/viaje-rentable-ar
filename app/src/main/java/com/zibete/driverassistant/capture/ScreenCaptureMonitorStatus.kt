@@ -6,6 +6,7 @@ enum class ScreenCaptureMonitorStatus {
     MONITORING,
     ANALYZING,
     OFFER_DETECTED,
+    INCOMPLETE_DATA,
     NO_OFFER_DETECTED,
     ERROR
 }

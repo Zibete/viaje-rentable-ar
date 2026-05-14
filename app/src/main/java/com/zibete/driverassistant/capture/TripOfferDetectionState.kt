@@ -1,24 +1,17 @@
 package com.zibete.driverassistant.capture
 
-import com.zibete.driverassistant.calculator.TripDecisionResult
+import com.zibete.driverassistant.calculator.TripOfferInput
 
 class TripOfferDetectionState {
     private var lastShownSignature: TripOfferSignature? = null
 
-    fun shouldShowOverlay(
-        result: TripDecisionResult,
-        rawText: String?
-    ): Boolean {
-        val signature = TripOfferSignature.fromDecisionResult(
-            result = result,
-            rawText = rawText
-        )
-        if (signature == lastShownSignature) {
-            return false
-        }
+    fun shouldShowOverlay(input: TripOfferInput): Boolean {
+        val signature = TripOfferSignature.fromTripOfferInput(input)
+        return signature != lastShownSignature
+    }
 
-        lastShownSignature = signature
-        return true
+    fun markOverlayShown(input: TripOfferInput) {
+        lastShownSignature = TripOfferSignature.fromTripOfferInput(input)
     }
 
     fun reset() {

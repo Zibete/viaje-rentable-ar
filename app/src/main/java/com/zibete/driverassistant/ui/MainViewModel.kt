@@ -299,6 +299,7 @@ class MainViewModel(
             ScreenCaptureMonitorStatus.MONITORING -> "Monitoreando"
             ScreenCaptureMonitorStatus.ANALYZING -> "Analizando"
             ScreenCaptureMonitorStatus.OFFER_DETECTED -> "Oferta detectada"
+            ScreenCaptureMonitorStatus.INCOMPLETE_DATA -> "Datos incompletos"
             ScreenCaptureMonitorStatus.NO_OFFER_DETECTED -> "Sin oferta detectada"
             ScreenCaptureMonitorStatus.ERROR -> "Error"
         }
@@ -311,6 +312,9 @@ class MainViewModel(
             }
             status == ScreenCaptureMonitorStatus.OFFER_DETECTED -> {
                 "Oferta ya mostrada; no se duplico el overlay"
+            }
+            status == ScreenCaptureMonitorStatus.INCOMPLETE_DATA -> {
+                "Datos incompletos: no se mostro overlay"
             }
             status == ScreenCaptureMonitorStatus.NO_OFFER_DETECTED -> {
                 "No se detecto oferta en los ultimos ciclos"

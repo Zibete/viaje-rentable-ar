@@ -312,13 +312,17 @@ class DriverDecisionOverlayService : Service() {
 
         return OverlayCardState(
             decision = decision,
-            fareText = getStringExtra(EXTRA_FARE_TEXT).orEmpty(),
-            arsPerHourText = getStringExtra(EXTRA_ARS_PER_HOUR_TEXT).orEmpty(),
-            arsPerKmText = getStringExtra(EXTRA_ARS_PER_KM_TEXT).orEmpty(),
-            totalTimeText = getStringExtra(EXTRA_TOTAL_TIME_TEXT).orEmpty(),
-            totalKmText = getStringExtra(EXTRA_TOTAL_KM_TEXT).orEmpty(),
+            fareText = getStringExtra(EXTRA_FARE_TEXT).orDefault("$ -"),
+            arsPerHourText = getStringExtra(EXTRA_ARS_PER_HOUR_TEXT).orDefault("$ -"),
+            arsPerKmText = getStringExtra(EXTRA_ARS_PER_KM_TEXT).orDefault("$ -"),
+            totalTimeText = getStringExtra(EXTRA_TOTAL_TIME_TEXT).orDefault("- min"),
+            totalKmText = getStringExtra(EXTRA_TOTAL_KM_TEXT).orDefault("- km"),
             shortReason = getStringExtra(EXTRA_SHORT_REASON)
         )
+    }
+
+    private fun String?.orDefault(defaultValue: String): String {
+        return takeUnless { it.isNullOrBlank() } ?: defaultValue
     }
 
     private fun DriverDecision.toSpanishLabel(): String {

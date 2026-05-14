@@ -39,7 +39,7 @@ data class OverlayCardState(
         }
 
         private fun Double?.toMoneyText(): String {
-            return this?.roundToInt()?.let { "$ $it" } ?: "-"
+            return this?.roundToInt()?.let { "$ $it" } ?: "$ -"
         }
 
         private fun Double?.toDisplayNumber(): String {

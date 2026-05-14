@@ -32,6 +32,7 @@ import com.zibete.driverassistant.ocr.TripOfferAnalysisResult
 import com.zibete.driverassistant.ocr.TripOfferDecisionPipeline
 import com.zibete.driverassistant.overlay.DriverDecisionOverlayService
 import com.zibete.driverassistant.overlay.OverlayCardState
+import com.zibete.driverassistant.overlay.hasCompleteOverlayData
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -230,16 +231,19 @@ class ScreenCaptureMonitorService : Service() {
             is TripOfferAnalysisResult.DecisionReady -> {
                 noOfferCycles = 0
                 val result = analysis.result
-                val shouldShowOverlay = detectionState.shouldShowOverlay(result, rawText)
+                if (!result.hasCompleteOverlayData()) {
+                    markIncompleteOffer(rawText, result)
+                    return
+                }
+
+                val shouldShowOverlay = detectionState.shouldShowOverlay(analysis.input)
                 val overlayUpdated = if (shouldShowOverlay) {
                     startDecisionOverlay(result)
                 } else {
                     false
                 }
-                if (shouldShowOverlay) {
-                    if (!overlayUpdated) {
-                        detectionState.reset()
-                    }
+                if (overlayUpdated) {
+                    detectionState.markOverlayShown(analysis.input)
                 }
                 publishStatus(
                     status = ScreenCaptureMonitorStatus.OFFER_DETECTED,
@@ -250,6 +254,20 @@ class ScreenCaptureMonitorService : Service() {
                 )
             }
         }
+    }
+
+    private fun markIncompleteOffer(
+        rawText: String?,
+        result: TripDecisionResult
+    ) {
+        publishStatus(
+            status = ScreenCaptureMonitorStatus.INCOMPLETE_DATA,
+            recognizedText = rawText,
+            ocrStatus = OcrStatus.TEXT_DETECTED,
+            errorMessage = "Datos incompletos para mostrar overlay.",
+            decisionResult = result,
+            overlayUpdated = false
+        )
     }
 
     private fun markNoOffer(rawText: String?, ocrStatus: OcrStatus) {
