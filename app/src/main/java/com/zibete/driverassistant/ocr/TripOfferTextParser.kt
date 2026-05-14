@@ -1,13 +1,23 @@
 package com.zibete.driverassistant.ocr
 
+import com.zibete.driverassistant.debug.DriverAssistantDebugLogger
+
 class TripOfferTextParser(
     private val textSanitizer: RecognizedTextSanitizer = RecognizedTextSanitizer()
 ) {
     fun parse(rawText: String): TripOfferCandidate? {
-        if (rawText.isBlank()) return null
+        DriverAssistantDebugLogger.log("parser rawText", rawText)
+        if (rawText.isBlank()) {
+            DriverAssistantDebugLogger.log("parser result", "blank raw text")
+            return null
+        }
 
         val sanitizedText = textSanitizer.sanitize(rawText)
-        if (sanitizedText.isBlank()) return null
+        DriverAssistantDebugLogger.log("parser sanitizedText", sanitizedText)
+        if (sanitizedText.isBlank()) {
+            DriverAssistantDebugLogger.log("parser result", "blank sanitized text")
+            return null
+        }
 
         val platform = parsePlatform(sanitizedText)
         val uberStructuredFields = if (platform == "uber") {
@@ -54,7 +64,16 @@ class TripOfferTextParser(
             genericTimes.lastOrNull()
         }
 
+        DriverAssistantDebugLogger.log(
+            "parser extracted fields",
+            "platform=$platform, hasUberStructuredFields=$hasUberStructuredFields, " +
+                "uberStructuredFields=$uberStructuredFields, genericDistances=$genericDistances, " +
+                "genericTimes=$genericTimes, fare=$fare, pickupKm=$pickupKm, tripKm=$tripKm, " +
+                "pickupMinutes=$pickupMinutes, tripMinutes=$tripMinutes"
+        )
+
         if (fare == null && pickupKm == null && tripKm == null && pickupMinutes == null && tripMinutes == null && platform == null) {
+            DriverAssistantDebugLogger.log("parser result", "no trip fields detected")
             return null
         }
 
@@ -65,7 +84,7 @@ class TripOfferTextParser(
             if (platform != null) add(ParsedTripField.PLATFORM)
         }
 
-        return TripOfferCandidate(
+        val candidate = TripOfferCandidate(
             fareAmount = fare,
             pickupKm = pickupKm,
             tripKm = tripKm,
@@ -75,6 +94,8 @@ class TripOfferTextParser(
             rawText = sanitizedText,
             confidence = parsedFields.size / ParsedTripField.entries.size.toDouble()
         )
+        DriverAssistantDebugLogger.log("parser candidate", candidate)
+        return candidate
     }
 
     private fun parseFare(rawText: String): Double? {
