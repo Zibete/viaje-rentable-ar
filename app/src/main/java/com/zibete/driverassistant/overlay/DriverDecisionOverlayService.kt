@@ -82,8 +82,8 @@ class DriverDecisionOverlayService : Service() {
                 WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
             PixelFormat.TRANSLUCENT
         ).apply {
-            gravity = Gravity.TOP or Gravity.END
-            x = 24
+            gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+            x = 0
             y = 140
         }
 
@@ -145,7 +145,7 @@ class DriverDecisionOverlayService : Service() {
             addView(
                 overlayText(
                     text = leftText,
-                    sizeSp = 14f,
+                    sizeSp = 16f,
                     color = Color.rgb(238, 242, 246),
                     style = Typeface.BOLD
                 )
@@ -153,14 +153,14 @@ class DriverDecisionOverlayService : Service() {
             addView(
                 overlayText(
                     text = "  -  ",
-                    sizeSp = 14f,
+                    sizeSp = 16f,
                     color = Color.rgb(178, 188, 198)
                 )
             )
             addView(
                 overlayText(
                     text = rightText,
-                    sizeSp = 14f,
+                    sizeSp = 16f,
                     color = Color.rgb(238, 242, 246),
                     style = Typeface.BOLD
                 )
@@ -186,7 +186,7 @@ class DriverDecisionOverlayService : Service() {
                     }
                 },
                 FrameLayout.LayoutParams(
-                    FrameLayout.LayoutParams.MATCH_PARENT,
+                    260,
                     2
                 )
             )
@@ -196,19 +196,16 @@ class DriverDecisionOverlayService : Service() {
     private fun reasonText(reason: String): TextView {
         return overlayText(
             text = reason,
-            sizeSp = 12f,
+            sizeSp = 14f,
             color = Color.rgb(230, 234, 238)
         ).apply {
             maxLines = 2
-            maxWidth = 280
+            maxWidth = 260
             ellipsize = TextUtils.TruncateAt.END
         }
     }
 
     private fun ensureNotificationChannel() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
-            return
-        }
 
         val channel = NotificationChannel(
             NOTIFICATION_CHANNEL_ID,
