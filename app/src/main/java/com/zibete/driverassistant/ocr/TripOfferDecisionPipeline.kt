@@ -29,7 +29,10 @@ class TripOfferDecisionPipeline(
             zoneMatch = zoneMatch
         )
 
-        return TripOfferAnalysisResult.DecisionReady(result)
+        return TripOfferAnalysisResult.DecisionReady(
+            result = result,
+            input = input
+        )
     }
 
     private fun TripOfferCandidate.toTripOfferInput(): TripOfferInput {
@@ -48,5 +51,8 @@ class TripOfferDecisionPipeline(
 sealed interface TripOfferAnalysisResult {
     data object NoText : TripOfferAnalysisResult
     data object NoTripDetected : TripOfferAnalysisResult
-    data class DecisionReady(val result: TripDecisionResult) : TripOfferAnalysisResult
+    data class DecisionReady(
+        val result: TripDecisionResult,
+        val input: TripOfferInput
+    ) : TripOfferAnalysisResult
 }

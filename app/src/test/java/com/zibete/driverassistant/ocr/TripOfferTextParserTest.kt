@@ -127,4 +127,72 @@ class TripOfferTextParserTest {
         assertEquals(12.2, result?.tripKm ?: 0.0, 0.001)
         assertEquals("uber", result?.platform)
     }
+
+    @Test
+    fun ignoresExtraNumbersAroundStructuredUberOffer() {
+        val result = parser.parse(
+            """
+            RECHAZAR
+            ${'$'} 10
+            ${'$'} 5/h - ${'$'} 0/km
+            131,5 min - 44,1 km
+            4,98 (253)
+            14:35
+            87%
+            UberX
+            7.124 ARS
+            A 6 min (2.5 km) de distancia
+            Viaje de 24 min (12.2 km)
+            453.2 km
+            56.4 km
+            """.trimIndent()
+        )
+
+        assertNotNull(result)
+        assertEquals(7124.0, result?.fareAmount ?: 0.0, 0.001)
+        assertEquals(6.0, result?.pickupMinutes ?: 0.0, 0.001)
+        assertEquals(2.5, result?.pickupKm ?: 0.0, 0.001)
+        assertEquals(24.0, result?.tripMinutes ?: 0.0, 0.001)
+        assertEquals(12.2, result?.tripKm ?: 0.0, 0.001)
+    }
+
+    @Test
+    fun doesNotUseGenericFallbackWhenStructuredUberOfferIsPartial() {
+        val result = parser.parse(
+            """
+            UberX
+            7.124 ARS
+            A 6 min (2.5 km) de distancia
+            453.2 km
+            56.4 km
+            """.trimIndent()
+        )
+
+        assertNotNull(result)
+        assertEquals(7124.0, result?.fareAmount ?: 0.0, 0.001)
+        assertEquals(6.0, result?.pickupMinutes ?: 0.0, 0.001)
+        assertEquals(2.5, result?.pickupKm ?: 0.0, 0.001)
+        assertEquals(null, result?.tripMinutes)
+        assertEquals(null, result?.tripKm)
+    }
+
+    @Test
+    fun doesNotUseGenericFareFallbackWhenStructuredUberOfferIsPresent() {
+        val result = parser.parse(
+            """
+            RECHAZAR
+            ${'$'} 10
+            UberX
+            A 6 min (2.5 km) de distancia
+            Viaje de 24 min (12.2 km)
+            """.trimIndent()
+        )
+
+        assertNotNull(result)
+        assertEquals(null, result?.fareAmount)
+        assertEquals(6.0, result?.pickupMinutes ?: 0.0, 0.001)
+        assertEquals(2.5, result?.pickupKm ?: 0.0, 0.001)
+        assertEquals(24.0, result?.tripMinutes ?: 0.0, 0.001)
+        assertEquals(12.2, result?.tripKm ?: 0.0, 0.001)
+    }
 }
