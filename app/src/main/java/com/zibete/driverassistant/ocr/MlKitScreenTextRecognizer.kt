@@ -5,13 +5,16 @@ import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 
-class MlKitScreenTextRecognizer {
+class MlKitScreenTextRecognizer(
+    private val bitmapPreprocessor: OcrBitmapPreprocessor = OcrBitmapPreprocessor()
+) {
     fun recognizeText(
         bitmap: Bitmap,
         onResult: (OcrTextResult) -> Unit
     ) {
         val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
-        val image = InputImage.fromBitmap(bitmap, 0)
+        val processedBitmap = bitmapPreprocessor.preprocess(bitmap)
+        val image = InputImage.fromBitmap(processedBitmap, 0)
 
         recognizer.process(image)
             .addOnSuccessListener { recognizedText ->
@@ -36,6 +39,9 @@ class MlKitScreenTextRecognizer {
                 )
             }
             .addOnCompleteListener {
+                if (processedBitmap !== bitmap) {
+                    processedBitmap.recycle()
+                }
                 recognizer.close()
             }
     }
