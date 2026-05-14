@@ -114,4 +114,55 @@ class TripOfferDecisionPipelineTest {
         assertEquals(14248.0, decision.result.arsPerHour ?: 0.0, 0.001)
         assertTrue(decision.result.rejectionReasons.any { it.contains("$/km") })
     }
+
+    @Test
+    fun calculatesDecisionFromCurrentRealUberOffer() {
+        val result = pipeline.analyzeRecognizedText(
+            rawText = """
+                UberX
+                5.472 ARS
+                DNI verificado
+                4,89 (18)
+                A 3 min (1.3 km) de distancia
+                Cabo 1ro Daniel A. Romero, Pilar
+                Viaje de 26 min (11.9 km)
+                Dr Francisco J. Muñiz 5802, Jose C. Paz
+                Aceptar
+            """.trimIndent(),
+            config = config
+        )
+
+        val decision = result as TripOfferAnalysisResult.DecisionReady
+        assertEquals(DriverDecision.REJECT, decision.result.decision)
+        assertEquals(5472.0, decision.result.fareAmount ?: 0.0, 0.001)
+        assertEquals(13.2, decision.result.totalKm ?: 0.0, 0.001)
+        assertEquals(29.0, decision.result.totalMinutes ?: 0.0, 0.001)
+        assertEquals(414.545, decision.result.arsPerKm ?: 0.0, 0.001)
+        assertEquals(11321.379, decision.result.arsPerHour ?: 0.0, 0.001)
+    }
+
+    @Test
+    fun calculatesDecisionFromCurrentUberOfferIgnoringOldOverlay() {
+        val result = pipeline.analyzeRecognizedText(
+            rawText = """
+                REVISAR
+                ${'$'} 5472
+                ${'$'} 531/km - ${'$'} -/h
+                - min - 10,3 km
+                Tiempo incompleto
+
+                UberX
+                5.472 ARS
+                A 3 min (1.3 km) de distancia
+                Viaje de 26 min (11.9 km)
+            """.trimIndent(),
+            config = config
+        )
+
+        val decision = result as TripOfferAnalysisResult.DecisionReady
+        assertEquals(DriverDecision.REJECT, decision.result.decision)
+        assertEquals(5472.0, decision.result.fareAmount ?: 0.0, 0.001)
+        assertEquals(13.2, decision.result.totalKm ?: 0.0, 0.001)
+        assertEquals(29.0, decision.result.totalMinutes ?: 0.0, 0.001)
+    }
 }
