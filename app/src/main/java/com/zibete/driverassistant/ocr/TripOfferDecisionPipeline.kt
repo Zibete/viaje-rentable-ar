@@ -22,7 +22,7 @@ class TripOfferDecisionPipeline(
         val candidate = parser.parse(rawText)
             ?: return TripOfferAnalysisResult.NoTripDetected
         val input = candidate.toTripOfferInput()
-        val zoneMatch = zoneMatcher.findMatch(rawText, config.avoidZones)
+        val zoneMatch = zoneMatcher.findMatch(candidate.rawText, config.avoidZones)
         val result = calculator.calculate(
             input = input,
             config = config,

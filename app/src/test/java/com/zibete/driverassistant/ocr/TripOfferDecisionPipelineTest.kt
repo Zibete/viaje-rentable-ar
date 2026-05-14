@@ -55,4 +55,31 @@ class TripOfferDecisionPipelineTest {
         assertEquals(DriverDecision.REVIEW, decision.result.decision)
         assertTrue(decision.result.reviewReasons.any { it.contains("incompleto") })
     }
+
+    @Test
+    fun calculatesDecisionFromUberOfferWhenOwnOverlayTextIsPresent() {
+        val result = pipeline.analyzeRecognizedText(
+            rawText = """
+                RECHAZAR
+                ${'$'} 10
+                ${'$'} 5/h - ${'$'} 0/km
+                131,5 min - 44,1 km
+                ${'$'}/km por debajo del minimo
+
+                UberX
+                7.124 ARS
+                A 6 min (2.5 km) de distancia
+                Viaje de 24 min (12.2 km)
+            """.trimIndent(),
+            config = config
+        )
+
+        val decision = result as TripOfferAnalysisResult.DecisionReady
+        assertEquals(DriverDecision.REJECT, decision.result.decision)
+        assertEquals(7124.0, decision.result.fareAmount ?: 0.0, 0.001)
+        assertEquals(14.7, decision.result.totalKm ?: 0.0, 0.001)
+        assertEquals(30.0, decision.result.totalMinutes ?: 0.0, 0.001)
+        assertEquals(484.626, decision.result.arsPerKm ?: 0.0, 0.001)
+        assertEquals(14248.0, decision.result.arsPerHour ?: 0.0, 0.001)
+    }
 }
