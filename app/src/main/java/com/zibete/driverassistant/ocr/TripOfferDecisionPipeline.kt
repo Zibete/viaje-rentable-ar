@@ -4,6 +4,7 @@ import com.zibete.driverassistant.calculator.DriverProfitCalculator
 import com.zibete.driverassistant.calculator.TripDecisionResult
 import com.zibete.driverassistant.calculator.TripOfferInput
 import com.zibete.driverassistant.config.DriverConfig
+import com.zibete.driverassistant.debug.DriverAssistantDebugLogger
 import com.zibete.driverassistant.zones.AvoidZoneMatcher
 
 class TripOfferDecisionPipeline(
@@ -15,19 +16,31 @@ class TripOfferDecisionPipeline(
         rawText: String?,
         config: DriverConfig
     ): TripOfferAnalysisResult {
+        DriverAssistantDebugLogger.log("pipeline rawText", rawText)
         if (rawText.isNullOrBlank()) {
+            DriverAssistantDebugLogger.log("pipeline result", "NoText")
             return TripOfferAnalysisResult.NoText
         }
 
         val candidate = parser.parse(rawText)
-            ?: return TripOfferAnalysisResult.NoTripDetected
+            ?: run {
+                DriverAssistantDebugLogger.log("pipeline result", "NoTripDetected")
+                return TripOfferAnalysisResult.NoTripDetected
+            }
+        DriverAssistantDebugLogger.log("pipeline candidate", candidate)
+
         val input = candidate.toTripOfferInput()
+        DriverAssistantDebugLogger.log("pipeline input", input)
+
         val zoneMatch = zoneMatcher.findMatch(candidate.rawText, config.avoidZones)
+        DriverAssistantDebugLogger.log("pipeline zoneMatch", zoneMatch)
+
         val result = calculator.calculate(
             input = input,
             config = config,
             zoneMatch = zoneMatch
         )
+        DriverAssistantDebugLogger.log("pipeline decisionResult", result)
 
         return TripOfferAnalysisResult.DecisionReady(
             result = result,
