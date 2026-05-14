@@ -15,5 +15,7 @@ data class MainUiState(
     val ocrErrorMessage: String? = null,
     val serviceStatus: String = "Detenido",
     val lastDecision: TripDecisionResult? = null,
+    val lastRealDecision: TripDecisionResult? = null,
+    val decisionStatusMessage: String? = null,
     val lastConfig: DriverConfig? = null
 )

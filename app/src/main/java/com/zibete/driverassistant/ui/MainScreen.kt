@@ -133,6 +133,7 @@ fun MainScreen(
         onCaptureFrame = {
             resolvedViewModel.updateScreenCaptureSession(screenCaptureManager.captureOnce())
         },
+        onAnalyzeOcr = resolvedViewModel::analyzeLastRecognizedText,
         onStartService = {
             val overlayState = resolvedViewModel.runSimulatedTripDecision()
             startDecisionOverlay(
@@ -155,6 +156,17 @@ fun MainScreen(
                 overlayPermissionHelper = overlayPermissionHelper
             )
         },
+        onShowLastRealDecisionOverlay = {
+            val overlayState = resolvedViewModel.buildLastRealDecisionOverlayState()
+            if (overlayState != null) {
+                startDecisionOverlay(
+                    context = context,
+                    overlayState = overlayState,
+                    viewModel = resolvedViewModel,
+                    overlayPermissionHelper = overlayPermissionHelper
+                )
+            }
+        },
         onIncreaseMinArsPerKm = resolvedViewModel::increaseMinArsPerKmPlaceholder,
         onResetConfig = resolvedViewModel::resetConfigToDefaults
     )
@@ -168,9 +180,11 @@ fun MainScreenContent(
     onRequestScreenCapturePermission: () -> Unit,
     onStopScreenCapture: () -> Unit,
     onCaptureFrame: () -> Unit,
+    onAnalyzeOcr: () -> Unit,
     onStartService: () -> Unit,
     onStopService: () -> Unit,
     onRunSimulatedDecision: () -> Unit,
+    onShowLastRealDecisionOverlay: () -> Unit,
     onIncreaseMinArsPerKm: () -> Unit,
     onResetConfig: () -> Unit
 ) {
@@ -220,6 +234,13 @@ fun MainScreenContent(
                 Text("Capturar frame")
             }
 
+            Button(
+                modifier = Modifier.fillMaxWidth(),
+                onClick = onAnalyzeOcr
+            ) {
+                Text("Analizar OCR")
+            }
+
             OutlinedButton(
                 modifier = Modifier.fillMaxWidth(),
                 onClick = onStopScreenCapture
@@ -254,6 +275,14 @@ fun MainScreenContent(
                 Text("Probar overlay simulado")
             }
 
+            OutlinedButton(
+                modifier = Modifier.fillMaxWidth(),
+                enabled = overlayActionsEnabled,
+                onClick = onShowLastRealDecisionOverlay
+            ) {
+                Text("Mostrar overlay con ultima decision real")
+            }
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -272,7 +301,10 @@ fun MainScreenContent(
                 }
             }
 
-            DecisionSection(uiState.lastDecision)
+            DecisionSection(
+                result = uiState.lastDecision,
+                statusMessage = uiState.decisionStatusMessage
+            )
             ConfigSection(uiState.lastConfig)
         }
     }
@@ -351,7 +383,7 @@ private fun ScreenCaptureInfoSection(uiState: MainUiState) {
                 style = MaterialTheme.typography.titleMedium
             )
             Text("Estado: ${uiState.screenCapturePermissionStatus}")
-            Text("Captura puntual con MediaProjection; todavia no se procesa OCR.")
+            Text("Captura puntual con MediaProjection; el OCR se analiza manualmente.")
             if (uiState.lastCapturedFrameWidth != null && uiState.lastCapturedFrameHeight != null) {
                 Text("Frame: ${uiState.lastCapturedFrameWidth} x ${uiState.lastCapturedFrameHeight}")
             }
@@ -389,7 +421,10 @@ private fun OcrInfoSection(uiState: MainUiState) {
 }
 
 @Composable
-private fun DecisionSection(result: TripDecisionResult?) {
+private fun DecisionSection(
+    result: TripDecisionResult?,
+    statusMessage: String?
+) {
     Card {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -399,6 +434,7 @@ private fun DecisionSection(result: TripDecisionResult?) {
                 text = "Ultima decision",
                 style = MaterialTheme.typography.titleMedium
             )
+            statusMessage?.let { Text(it) }
 
             if (result == null) {
                 Text("Sin calculo todavia")
@@ -475,6 +511,7 @@ fun MainScreenPreview() {
         ocrStatus = "Texto detectado",
         lastRecognizedText = "ARS 5.127\n41 min\n8.0 km",
         serviceStatus = "Ejecutando",
+        decisionStatusMessage = "Decision OCR calculada con datos completos",
         lastConfig = DriverConfig.default(),
         lastDecision = TripDecisionResult(
             decision = DriverDecision.ACCEPT,
@@ -497,9 +534,11 @@ fun MainScreenPreview() {
             onRequestScreenCapturePermission = {},
             onStopScreenCapture = {},
             onCaptureFrame = {},
+            onAnalyzeOcr = {},
             onStartService = {},
             onStopService = {},
             onRunSimulatedDecision = {},
+            onShowLastRealDecisionOverlay = {},
             onIncreaseMinArsPerKm = {},
             onResetConfig = {}
         )

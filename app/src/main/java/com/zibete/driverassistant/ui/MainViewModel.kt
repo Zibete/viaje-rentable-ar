@@ -3,12 +3,15 @@ package com.zibete.driverassistant.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.zibete.driverassistant.calculator.DriverProfitCalculator
+import com.zibete.driverassistant.calculator.TripDecisionResult
 import com.zibete.driverassistant.calculator.TripOfferInput
 import com.zibete.driverassistant.capture.ScreenCaptureSession
 import com.zibete.driverassistant.capture.ScreenCaptureStatus
 import com.zibete.driverassistant.config.DriverConfig
 import com.zibete.driverassistant.config.DriverConfigRepository
 import com.zibete.driverassistant.ocr.OcrStatus
+import com.zibete.driverassistant.ocr.TripOfferAnalysisResult
+import com.zibete.driverassistant.ocr.TripOfferDecisionPipeline
 import com.zibete.driverassistant.overlay.OverlayCardState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -18,7 +21,10 @@ import kotlinx.coroutines.launch
 
 class MainViewModel(
     private val configRepository: DriverConfigRepository,
-    private val calculator: DriverProfitCalculator = DriverProfitCalculator()
+    private val calculator: DriverProfitCalculator = DriverProfitCalculator(),
+    private val ocrDecisionPipeline: TripOfferDecisionPipeline = TripOfferDecisionPipeline(
+        calculator = calculator
+    )
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(MainUiState())
     val uiState: StateFlow<MainUiState> = _uiState.asStateFlow()
@@ -123,7 +129,60 @@ class MainViewModel(
             config = config
         )
 
-        _uiState.update { it.copy(lastDecision = result, lastConfig = config) }
+        _uiState.update {
+            it.copy(
+                lastDecision = result,
+                lastConfig = config,
+                decisionStatusMessage = "Decision simulada calculada"
+            )
+        }
+        return OverlayCardState.fromDecisionResult(result)
+    }
+
+    fun analyzeLastRecognizedText() {
+        val state = _uiState.value
+        val config = state.lastConfig ?: DriverConfig.default()
+
+        when (val analysis = ocrDecisionPipeline.analyzeRecognizedText(state.lastRecognizedText, config)) {
+            TripOfferAnalysisResult.NoText -> {
+                _uiState.update {
+                    it.copy(
+                        lastConfig = config,
+                        decisionStatusMessage = "No hay texto OCR para analizar"
+                    )
+                }
+            }
+            TripOfferAnalysisResult.NoTripDetected -> {
+                _uiState.update {
+                    it.copy(
+                        lastConfig = config,
+                        decisionStatusMessage = "No se pudo detectar una oferta de viaje en el OCR"
+                    )
+                }
+            }
+            is TripOfferAnalysisResult.DecisionReady -> {
+                val result = analysis.result
+                _uiState.update {
+                    it.copy(
+                        lastDecision = result,
+                        lastRealDecision = result,
+                        lastConfig = config,
+                        decisionStatusMessage = result.toAnalysisStatusMessage()
+                    )
+                }
+            }
+        }
+    }
+
+    fun buildLastRealDecisionOverlayState(): OverlayCardState? {
+        val result = _uiState.value.lastRealDecision
+        if (result == null) {
+            _uiState.update {
+                it.copy(decisionStatusMessage = "No hay una decision real calculada para mostrar en overlay")
+            }
+            return null
+        }
+
         return OverlayCardState.fromDecisionResult(result)
     }
 
@@ -144,6 +203,21 @@ class MainViewModel(
             OcrStatus.TEXT_DETECTED -> "Texto detectado"
             OcrStatus.NO_TEXT -> "Sin texto detectado"
             OcrStatus.ERROR -> "Error OCR"
+        }
+    }
+
+    private fun TripDecisionResult.toAnalysisStatusMessage(): String {
+        val missingDataReasons = (rejectionReasons + reviewReasons)
+            .filter { reason ->
+                reason.contains("no detectada", ignoreCase = true) ||
+                    reason.contains("incompleta", ignoreCase = true)
+            }
+
+        return when {
+            missingDataReasons.isNotEmpty() -> "Decision OCR calculada con datos faltantes: ${missingDataReasons.first()}"
+            rejectionReasons.isNotEmpty() -> "Decision OCR calculada: rechazo por ${rejectionReasons.first()}"
+            reviewReasons.isNotEmpty() -> "Decision OCR calculada: revisar por ${reviewReasons.first()}"
+            else -> "Decision OCR calculada con datos completos"
         }
     }
 }
