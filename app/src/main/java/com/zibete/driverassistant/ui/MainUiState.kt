@@ -2,6 +2,7 @@ package com.zibete.driverassistant.ui
 
 import com.zibete.driverassistant.calculator.TripDecisionResult
 import com.zibete.driverassistant.config.DriverConfig
+import com.zibete.driverassistant.config.DriverConfigFormState
 
 data class MainUiState(
     val overlayPermissionStatus: String = "Pendiente",
@@ -21,5 +22,7 @@ data class MainUiState(
     val lastDecision: TripDecisionResult? = null,
     val lastRealDecision: TripDecisionResult? = null,
     val decisionStatusMessage: String? = null,
-    val lastConfig: DriverConfig? = null
+    val lastConfig: DriverConfig? = null,
+    val configForm: DriverConfigFormState = DriverConfigFormState(),
+    val configStatusMessage: String? = null
 )

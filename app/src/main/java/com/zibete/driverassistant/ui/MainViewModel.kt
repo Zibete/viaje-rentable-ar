@@ -10,6 +10,9 @@ import com.zibete.driverassistant.capture.ScreenCaptureMonitorStatus
 import com.zibete.driverassistant.capture.ScreenCaptureSession
 import com.zibete.driverassistant.capture.ScreenCaptureStatus
 import com.zibete.driverassistant.config.DriverConfig
+import com.zibete.driverassistant.config.DriverConfigFormField
+import com.zibete.driverassistant.config.DriverConfigFormState
+import com.zibete.driverassistant.config.DriverConfigFormValidationResult
 import com.zibete.driverassistant.config.DriverConfigRepository
 import com.zibete.driverassistant.ocr.OcrStatus
 import com.zibete.driverassistant.ocr.TripOfferAnalysisResult
@@ -34,7 +37,12 @@ class MainViewModel(
     init {
         viewModelScope.launch {
             configRepository.config.collect { config ->
-                _uiState.update { it.copy(lastConfig = config) }
+                _uiState.update {
+                    it.copy(
+                        lastConfig = config,
+                        configForm = DriverConfigFormState.fromConfig(config)
+                    )
+                }
             }
         }
     }
@@ -148,11 +156,14 @@ class MainViewModel(
         }
     }
 
-    fun increaseMinArsPerKmPlaceholder() {
-        val currentConfig = _uiState.value.lastConfig ?: DriverConfig.default()
-        viewModelScope.launch {
-            configRepository.updateConfig(
-                currentConfig.copy(minArsPerKm = currentConfig.minArsPerKm + 25.0)
+    fun updateDriverConfigInput(
+        field: DriverConfigFormField,
+        value: String
+    ) {
+        _uiState.update {
+            it.copy(
+                configForm = it.configForm.update(field, value),
+                configStatusMessage = null
             )
         }
     }
@@ -160,6 +171,30 @@ class MainViewModel(
     fun resetConfigToDefaults() {
         viewModelScope.launch {
             configRepository.resetToDefaults()
+            _uiState.update {
+                it.copy(configStatusMessage = "Configuracion restablecida")
+            }
+        }
+    }
+
+    fun saveDriverConfigForm() {
+        val state = _uiState.value
+        val currentConfig = state.lastConfig ?: DriverConfig.default()
+
+        when (val result = state.configForm.toDriverConfig(currentConfig)) {
+            is DriverConfigFormValidationResult.Invalid -> {
+                _uiState.update {
+                    it.copy(configStatusMessage = result.message)
+                }
+            }
+            is DriverConfigFormValidationResult.Valid -> {
+                viewModelScope.launch {
+                    configRepository.updateConfig(result.config)
+                    _uiState.update {
+                        it.copy(configStatusMessage = "Configuracion guardada")
+                    }
+                }
+            }
         }
     }
 
