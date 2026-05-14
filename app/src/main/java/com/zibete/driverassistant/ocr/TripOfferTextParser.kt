@@ -225,10 +225,10 @@ class TripOfferTextParser(
         )
         val uberPickupRegexes = listOf(
             Regex(
-                pattern = """(?i)\bA\s+$TIME_DISTANCE_PATTERN(?:\s*de\s+distancia)?\b"""
+                pattern = """(?i)\bA\s*$TIME_DISTANCE_PATTERN(?:\s*de\s+distancia)?\b"""
             ),
             Regex(
-                pattern = """(?i)\b$TIME_DISTANCE_PATTERN\s*de\s+distancia\b"""
+                pattern = """(?i)(?:^|[^\p{Alnum}])$TIME_DISTANCE_PATTERN\s*de\s+distancia\b"""
             )
         )
         val uberTripRegexes = listOf(
