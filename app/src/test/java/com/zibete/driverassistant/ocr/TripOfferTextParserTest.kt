@@ -283,6 +283,29 @@ class TripOfferTextParserTest {
     }
 
     @Test
+    fun parsesCurrentUberOfferWithJoinedPickupPrefix() {
+        val result = parser.parse(
+            """
+            2 UberX Exclusivo
+            5.472 ARS
+            ODNI Verificado ★ 4,89 (18)
+            A3 min (1.3 km) de distancia
+            Cabo lro Daniel A. Romero, Pilar
+            Viaje de 26 min (11.9 km)
+            Dr. Francisco J. Muñiz 5802, Jose C. Paz
+            """.trimIndent()
+        )
+
+        assertNotNull(result)
+        assertEquals(5472.0, result?.fareAmount ?: 0.0, 0.001)
+        assertEquals(3.0, result?.pickupMinutes ?: 0.0, 0.001)
+        assertEquals(1.3, result?.pickupKm ?: 0.0, 0.001)
+        assertEquals(26.0, result?.tripMinutes ?: 0.0, 0.001)
+        assertEquals(11.9, result?.tripKm ?: 0.0, 0.001)
+        assertEquals("uber", result?.platform)
+    }
+
+    @Test
     fun ignoresOldOverlayWhenParsingCurrentUberOffer() {
         val result = parser.parse(
             """
