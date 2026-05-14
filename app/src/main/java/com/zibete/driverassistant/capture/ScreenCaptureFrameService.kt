@@ -6,9 +6,11 @@ import android.app.NotificationManager
 import android.app.Service
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.graphics.Bitmap
 import android.graphics.PixelFormat
 import android.hardware.display.DisplayManager
 import android.hardware.display.VirtualDisplay
+import android.media.Image
 import android.media.ImageReader
 import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
@@ -18,6 +20,9 @@ import android.os.HandlerThread
 import android.os.IBinder
 import android.util.DisplayMetrics
 import androidx.core.app.NotificationCompat
+import com.zibete.driverassistant.ocr.MlKitScreenTextRecognizer
+import com.zibete.driverassistant.ocr.OcrStatus
+import com.zibete.driverassistant.ocr.OcrTextResult
 import java.util.concurrent.atomic.AtomicBoolean
 
 class ScreenCaptureFrameService : Service() {
@@ -26,6 +31,7 @@ class ScreenCaptureFrameService : Service() {
     private var imageReader: ImageReader? = null
     private var virtualDisplay: VirtualDisplay? = null
     private var captureThread: HandlerThread? = null
+    private val textRecognizer = MlKitScreenTextRecognizer()
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -104,14 +110,27 @@ class ScreenCaptureFrameService : Service() {
                         return@setOnImageAvailableListener
                     }
 
-                    val resultIntent = Intent(ACTION_CAPTURE_RESULT).apply {
-                        putExtra(EXTRA_STATUS, ScreenCaptureStatus.CAPTURE_AVAILABLE.name)
-                        putExtra(EXTRA_FRAME_WIDTH, image.width)
-                        putExtra(EXTRA_FRAME_HEIGHT, image.height)
-                        putExtra(EXTRA_CAPTURED_AT_MILLIS, System.currentTimeMillis())
-                    }
+                    val frameWidth = image.width
+                    val frameHeight = image.height
+                    val capturedAtMillis = System.currentTimeMillis()
+                    val bitmap = runCatching { image.toBitmap() }
+                        .onFailure { error ->
+                            image.close()
+                            finish(buildErrorIntent(error.message ?: "No se pudo preparar el frame para OCR."))
+                        }
+                        .getOrNull() ?: return@setOnImageAvailableListener
                     image.close()
-                    finish(resultIntent)
+
+                    textRecognizer.recognizeText(bitmap) { ocrResult ->
+                        finish(
+                            buildCaptureResultIntent(
+                                frameWidth = frameWidth,
+                                frameHeight = frameHeight,
+                                capturedAtMillis = capturedAtMillis,
+                                ocrResult = ocrResult
+                            )
+                        )
+                    }
                 },
                 captureHandler
             )
@@ -184,6 +203,25 @@ class ScreenCaptureFrameService : Service() {
         return Intent(ACTION_CAPTURE_RESULT).apply {
             putExtra(EXTRA_STATUS, ScreenCaptureStatus.ERROR.name)
             putExtra(EXTRA_ERROR_MESSAGE, message)
+            putExtra(EXTRA_OCR_STATUS, OcrStatus.ERROR.name)
+            putExtra(EXTRA_OCR_ERROR_MESSAGE, message)
+        }
+    }
+
+    private fun buildCaptureResultIntent(
+        frameWidth: Int,
+        frameHeight: Int,
+        capturedAtMillis: Long,
+        ocrResult: OcrTextResult
+    ): Intent {
+        return Intent(ACTION_CAPTURE_RESULT).apply {
+            putExtra(EXTRA_STATUS, ScreenCaptureStatus.CAPTURE_AVAILABLE.name)
+            putExtra(EXTRA_FRAME_WIDTH, frameWidth)
+            putExtra(EXTRA_FRAME_HEIGHT, frameHeight)
+            putExtra(EXTRA_CAPTURED_AT_MILLIS, capturedAtMillis)
+            putExtra(EXTRA_OCR_STATUS, ocrResult.status.name)
+            putExtra(EXTRA_RECOGNIZED_TEXT, ocrResult.rawText)
+            putExtra(EXTRA_OCR_ERROR_MESSAGE, ocrResult.errorMessage)
         }
     }
 
@@ -213,9 +251,29 @@ class ScreenCaptureFrameService : Service() {
         const val EXTRA_FRAME_HEIGHT = "extra_frame_height"
         const val EXTRA_CAPTURED_AT_MILLIS = "extra_captured_at_millis"
         const val EXTRA_ERROR_MESSAGE = "extra_error_message"
+        const val EXTRA_OCR_STATUS = "extra_ocr_status"
+        const val EXTRA_RECOGNIZED_TEXT = "extra_recognized_text"
+        const val EXTRA_OCR_ERROR_MESSAGE = "extra_ocr_error_message"
 
         private const val NOTIFICATION_CHANNEL_ID = "screen_capture_frame_service"
         private const val NOTIFICATION_ID = 4201
         private const val FALLBACK_CAPTURE_SIZE = 1
+    }
+}
+
+private fun Image.toBitmap(): Bitmap {
+    val plane = planes.first()
+    val buffer = plane.buffer
+    val pixelStride = plane.pixelStride
+    val rowStride = plane.rowStride
+    val bitmapWidth = rowStride / pixelStride
+    val paddedBitmap = Bitmap.createBitmap(bitmapWidth, height, Bitmap.Config.ARGB_8888)
+    paddedBitmap.copyPixelsFromBuffer(buffer)
+    return if (bitmapWidth == width) {
+        paddedBitmap
+    } else {
+        Bitmap.createBitmap(paddedBitmap, 0, 0, width, height).also {
+            paddedBitmap.recycle()
+        }
     }
 }

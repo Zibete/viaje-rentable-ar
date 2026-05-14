@@ -10,6 +10,9 @@ data class MainUiState(
     val lastCapturedFrameWidth: Int? = null,
     val lastCapturedFrameHeight: Int? = null,
     val lastCapturedFrameTimestamp: Long? = null,
+    val ocrStatus: String = "OCR inactivo",
+    val lastRecognizedText: String? = null,
+    val ocrErrorMessage: String? = null,
     val serviceStatus: String = "Detenido",
     val lastDecision: TripDecisionResult? = null,
     val lastConfig: DriverConfig? = null

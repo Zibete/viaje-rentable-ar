@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.media.projection.MediaProjectionManager
+import com.zibete.driverassistant.ocr.OcrStatus
 
 class ScreenCaptureManager(
     context: Context
@@ -59,6 +60,9 @@ class ScreenCaptureManager(
         currentSession = currentSession.copy(
             status = ScreenCaptureStatus.PENDING,
             lastFrame = null,
+            ocrStatus = OcrStatus.PROCESSING,
+            recognizedText = null,
+            ocrErrorMessage = null,
             errorMessage = null
         )
         return currentSession
@@ -86,6 +90,11 @@ class ScreenCaptureManager(
             resultCode = null,
             resultData = null,
             lastFrame = frame,
+            ocrStatus = intent.getStringExtra(ScreenCaptureFrameService.EXTRA_OCR_STATUS)
+                ?.let { runCatching { OcrStatus.valueOf(it) }.getOrNull() }
+                ?: OcrStatus.IDLE,
+            recognizedText = intent.getStringExtra(ScreenCaptureFrameService.EXTRA_RECOGNIZED_TEXT),
+            ocrErrorMessage = intent.getStringExtra(ScreenCaptureFrameService.EXTRA_OCR_ERROR_MESSAGE),
             errorMessage = intent.getStringExtra(ScreenCaptureFrameService.EXTRA_ERROR_MESSAGE)
         )
         return currentSession
