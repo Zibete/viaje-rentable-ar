@@ -110,6 +110,7 @@ class ScreenCaptureMonitorService : Service() {
 
     override fun onDestroy() {
         releaseCaptureResources()
+        textRecognizer.close()
         serviceScope.cancel()
         super.onDestroy()
     }

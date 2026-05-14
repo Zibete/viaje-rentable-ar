@@ -3,16 +3,17 @@ package com.zibete.driverassistant.ocr
 import android.graphics.Bitmap
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
+import com.google.mlkit.vision.text.TextRecognizer
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 
 class MlKitScreenTextRecognizer(
-    private val bitmapPreprocessor: OcrBitmapPreprocessor = OcrBitmapPreprocessor()
+    private val bitmapPreprocessor: OcrBitmapPreprocessor = OcrBitmapPreprocessor(),
+    private val recognizer: TextRecognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
 ) {
     fun recognizeText(
         bitmap: Bitmap,
         onResult: (OcrTextResult) -> Unit
     ) {
-        val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
         val processedBitmap = bitmapPreprocessor.preprocess(bitmap)
         val image = InputImage.fromBitmap(processedBitmap, 0)
 
@@ -42,7 +43,10 @@ class MlKitScreenTextRecognizer(
                 if (processedBitmap !== bitmap) {
                     processedBitmap.recycle()
                 }
-                recognizer.close()
             }
+    }
+
+    fun close() {
+        recognizer.close()
     }
 }
