@@ -9,6 +9,7 @@ import com.zibete.driverassistant.zones.AvoidZoneMatcher
 
 class TripOfferDecisionPipeline(
     private val parser: TripOfferTextParser = TripOfferTextParser(),
+    private val presenceValidator: TripOfferPresenceValidator = TripOfferPresenceValidator(),
     private val calculator: DriverProfitCalculator = DriverProfitCalculator(),
     private val zoneMatcher: AvoidZoneMatcher = AvoidZoneMatcher()
 ) {
@@ -20,6 +21,11 @@ class TripOfferDecisionPipeline(
         if (rawText.isNullOrBlank()) {
             DriverAssistantDebugLogger.log("pipeline result", "NoText")
             return TripOfferAnalysisResult.NoText
+        }
+
+        if (!presenceValidator.hasActiveOffer(rawText)) {
+            DriverAssistantDebugLogger.log("pipeline result", "No active offer action marker")
+            return TripOfferAnalysisResult.NoTripDetected
         }
 
         val candidate = parser.parse(rawText)
