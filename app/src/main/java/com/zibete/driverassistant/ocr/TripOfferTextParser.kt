@@ -99,13 +99,29 @@ class TripOfferTextParser(
     }
 
     private fun parseFare(rawText: String): Double? {
-        return parseUberStructuredFare(rawText)
+        return parseExplicitFare(rawText)
+            ?: parseStandaloneLargeFare(rawText)
+    }
+
+    private fun parseUberStructuredFare(rawText: String): Double? {
+        return parseExplicitFare(rawText)
+            ?: parseStandaloneLargeFare(rawText)
+    }
+
+    private fun parseExplicitFare(rawText: String): Double? {
+        return trailingArsFareRegex.find(rawText)?.groupValues?.get(1)?.toMoneyOrNull()
             ?: currencyFareRegex.find(rawText)?.groupValues?.get(1)?.toMoneyOrNull()
             ?: pesosFareRegex.find(rawText)?.groupValues?.get(1)?.toMoneyOrNull()
     }
 
-    private fun parseUberStructuredFare(rawText: String): Double? {
-        return trailingArsFareRegex.find(rawText)?.groupValues?.get(1)?.toMoneyOrNull()
+    private fun parseStandaloneLargeFare(rawText: String): Double? {
+        return rawText.lineSequence()
+            .map { it.trim() }
+            .filter { line -> line.isNotBlank() }
+            .filterNot { line -> line.containsMetricOrNoise() }
+            .flatMap { line -> standaloneLargeFareRegex.findAll(line) }
+            .mapNotNull { match -> match.groupValues[1].toMoneyOrNull() }
+            .firstOrNull { amount -> amount >= MIN_STANDALONE_FARE }
     }
 
     private fun parseUberStructuredFields(rawText: String): StructuredTripFields {
@@ -189,6 +205,10 @@ class TripOfferTextParser(
             .toDecimalOrNull()
     }
 
+    private fun String.containsMetricOrNoise(): Boolean {
+        return metricOrNoiseRegex.containsMatchIn(this)
+    }
+
     private data class StructuredTripFields(
         val pickupKm: Double? = null,
         val tripKm: Double? = null,
@@ -209,6 +229,7 @@ class TripOfferTextParser(
     )
 
     private companion object {
+        private const val MIN_STANDALONE_FARE = 1_000.0
         private const val TIME_DISTANCE_PATTERN =
             """([0-9lI|]+(?:[.,][0-9lI|]+)?)\s*(?:m\s*(?:in|n|inutos)?|rnin)\s*(?:\(\s*)?([0-9lI|]+(?:[.,][0-9lI|]+)?)\s*k\s*(?:m|rn|in)(?:\s*\))?"""
 
@@ -220,6 +241,12 @@ class TripOfferTextParser(
         )
         val pesosFareRegex = Regex(
             pattern = """(?i)\b(\d{1,3}(?:[.,]\d{3})+|\d+)\s*pesos\b"""
+        )
+        val standaloneLargeFareRegex = Regex(
+            pattern = """\b(\d{4,6}|\d{1,3}(?:[.,]\d{3})+)\b"""
+        )
+        val metricOrNoiseRegex = Regex(
+            pattern = """(?i)(?:\b(?:min|km|ars|pesos|dni|viaje|distancia)\b|\$/|/\s*(?:h|km)|%|\d+\s*:\s*\d+|\d+[.,]\d+\s*\()"""
         )
         val distanceRegex = Regex(
             pattern = """(?i)\b(\d+(?:[.,]\d+)?)\s*km\b"""
