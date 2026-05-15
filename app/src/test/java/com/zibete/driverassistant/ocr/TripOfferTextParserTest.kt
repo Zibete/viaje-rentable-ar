@@ -177,7 +177,7 @@ class TripOfferTextParserTest {
     }
 
     @Test
-    fun doesNotUseGenericFareFallbackWhenStructuredUberOfferIsPresent() {
+    fun doesNotUseSmallOverlayAmountAsStructuredFare() {
         val result = parser.parse(
             """
             RECHAZAR
@@ -340,6 +340,32 @@ class TripOfferTextParserTest {
             "A 3 m in (1.3 km) de distancia"
         ).forEach { pickupLine ->
             assertParsesUberMetrics(pickupLine = pickupLine)
+        }
+    }
+
+    @Test
+    fun parsesStructuredUberFareVariants() {
+        listOf(
+            "5.472 ARS",
+            "5472 ARS",
+            "ARS 5.472",
+            "ARS 5472",
+            "${'$'} 5.472",
+            "${'$'} 5472",
+            "5472"
+        ).forEach { fareLine ->
+            val result = parser.parse(
+                """
+                UberX
+                $fareLine
+                A 3 min (1.3 km) de distancia
+                Viaje de 26 min (11.9 km)
+                Aceptar
+                """.trimIndent()
+            )
+
+            assertNotNull(result)
+            assertEquals(5472.0, result?.fareAmount ?: 0.0, 0.001)
         }
     }
 
