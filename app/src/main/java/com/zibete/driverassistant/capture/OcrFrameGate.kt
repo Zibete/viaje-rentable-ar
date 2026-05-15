@@ -102,11 +102,19 @@ class OcrFrameGate(
 
         candidateSignature = signature
         stableCandidateFrames = 1
-        return skipOcr(
-            reason = "waiting stable candidate",
-            changeScore = changeScore,
-            nextFrameDelayMillis = candidateFrameDelayMillis
-        )
+        return if (stableCandidateFrames >= stableFramesRequired) {
+            allowOcr(
+                nowMillis = nowMillis,
+                reason = "visual candidate",
+                changeScore = changeScore
+            )
+        } else {
+            skipOcr(
+                reason = "waiting stable candidate",
+                changeScore = changeScore,
+                nextFrameDelayMillis = candidateFrameDelayMillis
+            )
+        }
     }
 
     fun reset() {
@@ -162,11 +170,11 @@ class OcrFrameGate(
         private const val DEFAULT_VISUAL_CHANGE_THRESHOLD = 18.0
         private const val DEFAULT_STRONG_VISUAL_CHANGE_THRESHOLD = 42.0
         private const val DEFAULT_STABILITY_CHANGE_THRESHOLD = 8.0
-        private const val DEFAULT_STABLE_FRAMES_REQUIRED = 2
+        private const val DEFAULT_STABLE_FRAMES_REQUIRED = 1
         private const val DEFAULT_POST_OCR_COOLDOWN_MILLIS = 10_000L
         private const val DEFAULT_SAFETY_SCAN_INTERVAL_MILLIS = 30_000L
-        private const val DEFAULT_IDLE_FRAME_DELAY_MILLIS = 2_500L
-        private const val DEFAULT_CANDIDATE_FRAME_DELAY_MILLIS = 800L
-        private const val DEFAULT_COOLDOWN_FRAME_DELAY_MILLIS = 1_500L
+        private const val DEFAULT_IDLE_FRAME_DELAY_MILLIS = 1_200L
+        private const val DEFAULT_CANDIDATE_FRAME_DELAY_MILLIS = 350L
+        private const val DEFAULT_COOLDOWN_FRAME_DELAY_MILLIS = 1_200L
     }
 }
