@@ -62,6 +62,7 @@ class ScreenCaptureMonitorService : Service() {
     private var captureHandler: Handler? = null
     private var nextFrameAtMillis: Long = 0L
     private var noOfferCycles: Int = 0
+    private var overlayVisible: Boolean = false
 
     override fun onCreate() {
         super.onCreate()
@@ -233,6 +234,10 @@ class ScreenCaptureMonitorService : Service() {
 
         nextFrameAtMillis = now + gateDecision.nextFrameDelayMillis
 
+        if (gateDecision.reason == "waiting stable candidate") {
+            hideDecisionOverlay("new visual candidate")
+        }
+
         if (!gateDecision.shouldRunOcr) {
             DriverAssistantDebugLogger.log(
                 "monitor OCR skipped",
@@ -330,6 +335,7 @@ class ScreenCaptureMonitorService : Service() {
         noOfferCycles += 1
         val status = if (noOfferCycles >= NO_OFFER_STATUS_THRESHOLD) {
             detectionState.reset()
+            hideDecisionOverlay("no active offer")
             ScreenCaptureMonitorStatus.NO_OFFER_DETECTED
         } else {
             ScreenCaptureMonitorStatus.MONITORING
@@ -366,7 +372,16 @@ class ScreenCaptureMonitorService : Service() {
         } else {
             startService(intent)
         }
+        overlayVisible = true
         return true
+    }
+
+    private fun hideDecisionOverlay(reason: String) {
+        if (!overlayVisible) return
+        DriverAssistantDebugLogger.log("monitor overlay hidden", reason)
+        stopService(Intent(this, DriverDecisionOverlayService::class.java))
+        overlayVisible = false
+        detectionState.reset()
     }
 
     private fun publishStatus(
@@ -460,6 +475,7 @@ class ScreenCaptureMonitorService : Service() {
         frameGate.reset()
         detectionState.reset()
         isProcessingFrame.set(false)
+        overlayVisible = false
         runCatching { virtualDisplay?.release() }
         runCatching { imageReader?.close() }
         projectionCallback?.let { callback ->
