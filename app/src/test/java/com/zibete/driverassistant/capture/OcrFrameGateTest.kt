@@ -25,12 +25,22 @@ class OcrFrameGateTest {
     }
 
     @Test
-    fun allowsChangedFrameAfterItBecomesStable() {
+    fun allowsChangedFrameImmediatelyWithDefaultGate() {
+        val gate = OcrFrameGate()
+
+        gate.evaluate(signature(10), nowMillis = 0L)
+        val decision = gate.evaluate(signature(90), nowMillis = 11_000L)
+
+        assertTrue(decision.shouldRunOcr)
+    }
+
+    @Test
+    fun canWaitForStableCandidateWhenConfigured() {
         val gate = OcrFrameGate(stableFramesRequired = 2)
 
         gate.evaluate(signature(10), nowMillis = 0L)
         val firstChangedFrame = gate.evaluate(signature(90), nowMillis = 11_000L)
-        val stableChangedFrame = gate.evaluate(signature(91), nowMillis = 11_800L)
+        val stableChangedFrame = gate.evaluate(signature(91), nowMillis = 11_350L)
 
         assertFalse(firstChangedFrame.shouldRunOcr)
         assertTrue(stableChangedFrame.shouldRunOcr)
