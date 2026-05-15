@@ -55,6 +55,25 @@ class OcrFrameGate(
         val changeScore = signature.differenceScore(previousSignature)
         lastFrameSignature = signature
 
+        candidateSignature?.let { candidate ->
+            if (signature.differenceScore(candidate) <= stabilityChangeThreshold) {
+                stableCandidateFrames += 1
+                return if (stableCandidateFrames >= stableFramesRequired) {
+                    allowOcr(
+                        nowMillis = nowMillis,
+                        reason = "stable visual candidate",
+                        changeScore = changeScore
+                    )
+                } else {
+                    skipOcr(
+                        reason = "waiting stable candidate",
+                        changeScore = changeScore,
+                        nextFrameDelayMillis = candidateFrameDelayMillis
+                    )
+                }
+            }
+        }
+
         if (changeScore < visualChangeThreshold) {
             resetCandidate()
             return if (shouldRunSafetyScan(nowMillis)) {
@@ -81,38 +100,19 @@ class OcrFrameGate(
             )
         }
 
-        val stableFrames = updateStableCandidate(signature)
-        return if (stableFrames >= stableFramesRequired) {
-            allowOcr(
-                nowMillis = nowMillis,
-                reason = "stable visual candidate",
-                changeScore = changeScore
-            )
-        } else {
-            skipOcr(
-                reason = "waiting stable candidate",
-                changeScore = changeScore,
-                nextFrameDelayMillis = candidateFrameDelayMillis
-            )
-        }
+        candidateSignature = signature
+        stableCandidateFrames = 1
+        return skipOcr(
+            reason = "waiting stable candidate",
+            changeScore = changeScore,
+            nextFrameDelayMillis = candidateFrameDelayMillis
+        )
     }
 
     fun reset() {
         lastFrameSignature = null
         resetCandidate()
         lastOcrAtMillis = null
-    }
-
-    private fun updateStableCandidate(signature: FrameSignature): Int {
-        val candidate = candidateSignature
-        if (candidate == null || signature.differenceScore(candidate) > stabilityChangeThreshold) {
-            candidateSignature = signature
-            stableCandidateFrames = 1
-            return stableCandidateFrames
-        }
-
-        stableCandidateFrames += 1
-        return stableCandidateFrames
     }
 
     private fun allowOcr(
