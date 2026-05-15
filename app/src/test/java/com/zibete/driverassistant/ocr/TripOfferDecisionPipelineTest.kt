@@ -13,7 +13,10 @@ class TripOfferDecisionPipelineTest {
     @Test
     fun calculatesDecisionFromRecognizedText() {
         val result = pipeline.analyzeRecognizedText(
-            rawText = "Uber ARS 10.000 5 min 1 km 35 min 7 km",
+            rawText = """
+                Uber ARS 10.000 5 min 1 km 35 min 7 km
+                Aceptar
+            """.trimIndent(),
             config = config
         )
 
@@ -45,9 +48,27 @@ class TripOfferDecisionPipelineTest {
     }
 
     @Test
+    fun returnsNoTripDetectedWhenActionMarkerIsMissing() {
+        val result = pipeline.analyzeRecognizedText(
+            rawText = """
+                UberX
+                7.124 ARS
+                A 6 min (2.5 km) de distancia
+                Viaje de 24 min (12.2 km)
+            """.trimIndent(),
+            config = config
+        )
+
+        assertEquals(TripOfferAnalysisResult.NoTripDetected, result)
+    }
+
+    @Test
     fun letsCalculatorReviewPartialParsedData() {
         val result = pipeline.analyzeRecognizedText(
-            rawText = "Uber ARS 5.127 8 km",
+            rawText = """
+                Uber ARS 5.127 8 km
+                Aceptar
+            """.trimIndent(),
             config = config
         )
 
@@ -70,6 +91,7 @@ class TripOfferDecisionPipelineTest {
                 7.124 ARS
                 A 6 min (2.5 km) de distancia
                 Viaje de 24 min (12.2 km)
+                Emparejar
             """.trimIndent(),
             config = config
         )
@@ -101,6 +123,7 @@ class TripOfferDecisionPipelineTest {
                 Viaje de 24 min (12.2 km)
                 453.2 km
                 56.4 km
+                Emparejar
             """.trimIndent(),
             config = config
         )
@@ -155,6 +178,7 @@ class TripOfferDecisionPipelineTest {
                 5.472 ARS
                 A 3 min (1.3 km) de distancia
                 Viaje de 26 min (11.9 km)
+                Aceptar
             """.trimIndent(),
             config = config
         )
