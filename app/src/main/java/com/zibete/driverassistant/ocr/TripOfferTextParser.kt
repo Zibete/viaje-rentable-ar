@@ -95,8 +95,13 @@ class TripOfferTextParser(
     }
 
     private fun parseFare(rawText: String): Double? {
-        return parseExplicitFare(rawText)
-            ?: parseStandaloneLargeFare(rawText)
+        val baseFare = parseBaseFare(rawText)
+        return baseFare?.plus(parseAdditionalFares(rawText))
+    }
+
+    private fun parseBaseFare(rawText: String): Double? {
+        return parseExplicitBaseFare(rawText)
+            ?: parseStandaloneLargeBaseFare(rawText)
     }
 
     private fun parseStructuredFare(rawText: String): Double? {
@@ -114,14 +119,31 @@ class TripOfferTextParser(
         }
 
         val linesBeforeStructuredFields = lines.take(firstStructuredLineIndex).asReversed()
-        return linesBeforeStructuredFields
+        val baseFare = linesBeforeStructuredFields
+            .filterNot { line -> line.hasAdditionalFareContext() }
             .firstNotNullOfOrNull { line -> parseExplicitFare(line) }
             ?: linesBeforeStructuredFields
+                .filterNot { line -> line.hasAdditionalFareContext() }
                 .filterNot { line -> line.containsMetricOrNoise() }
                 .firstNotNullOfOrNull { line ->
                     standaloneLargeFareRegex.find(line)?.groupValues?.get(1)?.toMoneyOrNull()
                         ?.takeIf { amount -> amount >= MIN_STANDALONE_FARE }
                 }
+
+        val additionalFares = linesBeforeStructuredFields
+            .asReversed()
+            .joinToString("\n")
+            .let { parseAdditionalFares(it) }
+
+        return baseFare?.plus(additionalFares)
+    }
+
+    private fun parseExplicitBaseFare(rawText: String): Double? {
+        return rawText.lineSequence()
+            .map { it.trim() }
+            .filter { line -> line.isNotBlank() }
+            .filterNot { line -> line.hasAdditionalFareContext() }
+            .firstNotNullOfOrNull { line -> parseExplicitFare(line) }
     }
 
     private fun parseExplicitFare(rawText: String): Double? {
@@ -130,14 +152,24 @@ class TripOfferTextParser(
             ?: pesosFareRegex.find(rawText)?.groupValues?.get(1)?.toMoneyOrNull()
     }
 
-    private fun parseStandaloneLargeFare(rawText: String): Double? {
+    private fun parseStandaloneLargeBaseFare(rawText: String): Double? {
         return rawText.lineSequence()
             .map { it.trim() }
             .filter { line -> line.isNotBlank() }
+            .filterNot { line -> line.hasAdditionalFareContext() }
             .filterNot { line -> line.containsMetricOrNoise() }
             .flatMap { line -> standaloneLargeFareRegex.findAll(line) }
             .mapNotNull { match -> match.groupValues[1].toMoneyOrNull() }
             .firstOrNull { amount -> amount >= MIN_STANDALONE_FARE }
+    }
+
+    private fun parseAdditionalFares(rawText: String): Double {
+        return rawText.lineSequence()
+            .map { it.trim() }
+            .filter { line -> line.hasAdditionalFareContext() }
+            .flatMap { line -> additionalFareRegex.findAll(line) }
+            .mapNotNull { match -> match.groupValues[1].toMoneyOrNull() }
+            .sum()
     }
 
     private fun parseStructuredTripFields(rawText: String): StructuredTripFields {
@@ -225,6 +257,24 @@ class TripOfferTextParser(
         return metricOrNoiseRegex.containsMatchIn(this)
     }
 
+    private fun String.hasAdditionalFareContext(): Boolean {
+        return normalizeAdditionalFareContext().contains("adicional")
+    }
+
+    private fun String.normalizeAdditionalFareContext(): String {
+        return lowercase()
+            .replace('á', 'a')
+            .replace('é', 'e')
+            .replace('í', 'i')
+            .replace('ó', 'o')
+            .replace('ú', 'u')
+            .replace('1', 'l')
+            .replace('I', 'l')
+            .replace('|', 'l')
+            .replace(Regex("\\s+"), " ")
+            .trim()
+    }
+
     private data class StructuredTripFields(
         val pickupKm: Double? = null,
         val tripKm: Double? = null,
@@ -257,6 +307,9 @@ class TripOfferTextParser(
         )
         val pesosFareRegex = Regex(
             pattern = """(?i)\b(\d{1,3}(?:[.,]\d{3})+|\d+)\s*pesos\b"""
+        )
+        val additionalFareRegex = Regex(
+            pattern = """(?i)(?:\+\s*)?(\d{1,3}(?:[.,]\d{3})+|\d+(?:[.,]\d{1,2})?)\s*ARS\b"""
         )
         val standaloneLargeFareRegex = Regex(
             pattern = """\b(\d{4,6}|\d{1,3}(?:[.,]\d{3})+)\b"""
