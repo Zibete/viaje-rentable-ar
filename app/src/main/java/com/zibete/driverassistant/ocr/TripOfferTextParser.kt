@@ -20,54 +20,50 @@ class TripOfferTextParser(
         }
 
         val platform = parsePlatform(sanitizedText)
-        val uberStructuredFields = if (platform == "uber") {
-            parseUberStructuredFields(sanitizedText)
-        } else {
-            StructuredTripFields()
-        }
-        val hasUberStructuredFields = platform == "uber" && uberStructuredFields.hasAnyField()
-        val genericDistances = if (hasUberStructuredFields) {
+        val structuredTripFields = parseStructuredTripFields(sanitizedText)
+        val hasStructuredTripFields = structuredTripFields.hasAnyField()
+        val genericDistances = if (hasStructuredTripFields) {
             emptyList()
         } else {
             distanceRegex.findAll(sanitizedText)
                 .mapNotNull { it.groupValues[1].toDecimalOrNull() }
                 .toList()
         }
-        val genericTimes = if (hasUberStructuredFields) {
+        val genericTimes = if (hasStructuredTripFields) {
             emptyList()
         } else {
             parseTimes(sanitizedText)
         }
-        val fare = if (hasUberStructuredFields) {
-            parseUberStructuredFare(sanitizedText)
+        val fare = if (hasStructuredTripFields) {
+            parseStructuredFare(sanitizedText)
         } else {
             parseFare(sanitizedText)
         }
-        val pickupKm = if (hasUberStructuredFields) {
-            uberStructuredFields.pickupKm
+        val pickupKm = if (hasStructuredTripFields) {
+            structuredTripFields.pickupKm
         } else {
             genericDistances.getOrNull(1)?.let { genericDistances.firstOrNull() }
         }
-        val tripKm = if (hasUberStructuredFields) {
-            uberStructuredFields.tripKm
+        val tripKm = if (hasStructuredTripFields) {
+            structuredTripFields.tripKm
         } else {
             genericDistances.lastOrNull()
         }
-        val pickupMinutes = if (hasUberStructuredFields) {
-            uberStructuredFields.pickupMinutes
+        val pickupMinutes = if (hasStructuredTripFields) {
+            structuredTripFields.pickupMinutes
         } else {
             genericTimes.getOrNull(1)?.let { genericTimes.firstOrNull() }
         }
-        val tripMinutes = if (hasUberStructuredFields) {
-            uberStructuredFields.tripMinutes
+        val tripMinutes = if (hasStructuredTripFields) {
+            structuredTripFields.tripMinutes
         } else {
             genericTimes.lastOrNull()
         }
 
         DriverAssistantDebugLogger.log(
             "parser extracted fields",
-            "platform=$platform, hasUberStructuredFields=$hasUberStructuredFields, " +
-                "uberStructuredFields=$uberStructuredFields, genericDistances=$genericDistances, " +
+            "platform=$platform, hasStructuredTripFields=$hasStructuredTripFields, " +
+                "structuredTripFields=$structuredTripFields, genericDistances=$genericDistances, " +
                 "genericTimes=$genericTimes, fare=$fare, pickupKm=$pickupKm, tripKm=$tripKm, " +
                 "pickupMinutes=$pickupMinutes, tripMinutes=$tripMinutes"
         )
@@ -103,9 +99,29 @@ class TripOfferTextParser(
             ?: parseStandaloneLargeFare(rawText)
     }
 
-    private fun parseUberStructuredFare(rawText: String): Double? {
-        return parseExplicitFare(rawText)
-            ?: parseStandaloneLargeFare(rawText)
+    private fun parseStructuredFare(rawText: String): Double? {
+        val lines = rawText.lineSequence()
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+            .toList()
+        val firstStructuredLineIndex = lines.indexOfFirst { line ->
+            structuredFieldStartRegex.containsMatchIn(line) ||
+            structuredPickupRegexes.any { regex -> regex.containsMatchIn(line) } ||
+                structuredTripRegexes.any { regex -> regex.containsMatchIn(line) }
+        }
+        if (firstStructuredLineIndex <= 0) {
+            return parseFare(rawText)
+        }
+
+        val linesBeforeStructuredFields = lines.take(firstStructuredLineIndex).asReversed()
+        return linesBeforeStructuredFields
+            .firstNotNullOfOrNull { line -> parseExplicitFare(line) }
+            ?: linesBeforeStructuredFields
+                .filterNot { line -> line.containsMetricOrNoise() }
+                .firstNotNullOfOrNull { line ->
+                    standaloneLargeFareRegex.find(line)?.groupValues?.get(1)?.toMoneyOrNull()
+                        ?.takeIf { amount -> amount >= MIN_STANDALONE_FARE }
+                }
     }
 
     private fun parseExplicitFare(rawText: String): Double? {
@@ -124,9 +140,9 @@ class TripOfferTextParser(
             .firstOrNull { amount -> amount >= MIN_STANDALONE_FARE }
     }
 
-    private fun parseUberStructuredFields(rawText: String): StructuredTripFields {
-        val pickupMatch = parseFirstTimeDistanceMatch(rawText, uberPickupRegexes)
-        val tripMatch = parseFirstTimeDistanceMatch(rawText, uberTripRegexes)
+    private fun parseStructuredTripFields(rawText: String): StructuredTripFields {
+        val pickupMatch = parseFirstTimeDistanceMatch(rawText, structuredPickupRegexes)
+        val tripMatch = parseFirstTimeDistanceMatch(rawText, structuredTripRegexes)
 
         return StructuredTripFields(
             pickupMinutes = pickupMatch?.minutes,
@@ -257,7 +273,10 @@ class TripOfferTextParser(
         val minuteRegex = Regex(
             pattern = """(?i)\b(\d+(?:[.,]\d+)?)\s*min(?:utos)?\b"""
         )
-        val uberPickupRegexes = listOf(
+        val structuredFieldStartRegex = Regex(
+            pattern = """(?i)^(?:A\s*[0-9lI|]+|Viaje\b)"""
+        )
+        val structuredPickupRegexes = listOf(
             Regex(
                 pattern = """(?i)\bA\s*$TIME_DISTANCE_PATTERN(?:\s*de\s+distancia)?\b"""
             ),
@@ -265,7 +284,7 @@ class TripOfferTextParser(
                 pattern = """(?i)(?:^|[^\p{Alnum}])$TIME_DISTANCE_PATTERN\s*de\s+distancia\b"""
             )
         )
-        val uberTripRegexes = listOf(
+        val structuredTripRegexes = listOf(
             Regex(
                 pattern = """(?i)\bViaje(?:\s*de)?\s*$TIME_DISTANCE_PATTERN\b"""
             ),

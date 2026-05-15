@@ -306,6 +306,69 @@ class TripOfferTextParserTest {
     }
 
     @Test
+    fun parsesStructuredOfferWithoutPlatform() {
+        val result = parser.parse(
+            """
+            2 Comfort Exclusivo
+            8.780 ARS
+            A6 min (2.5 km) de distancia
+            Viaje de 26 min (12.2 km)
+            Aceptar
+            """.trimIndent()
+        )
+
+        assertNotNull(result)
+        assertEquals(8780.0, result?.fareAmount ?: 0.0, 0.001)
+        assertEquals(6.0, result?.pickupMinutes ?: 0.0, 0.001)
+        assertEquals(2.5, result?.pickupKm ?: 0.0, 0.001)
+        assertEquals(26.0, result?.tripMinutes ?: 0.0, 0.001)
+        assertEquals(12.2, result?.tripKm ?: 0.0, 0.001)
+        assertEquals(null, result?.platform)
+    }
+
+    @Test
+    fun parsesJoinedPickupMinutesWithoutPlatform() {
+        val result = parser.parse(
+            """
+            8.780 ARS
+            A6 min (2.5 km) de distancia
+            Viaje de 26 min (12.2 km)
+            """.trimIndent()
+        )
+
+        assertNotNull(result)
+        assertEquals(6.0, result?.pickupMinutes ?: 0.0, 0.001)
+        assertEquals(2.5, result?.pickupKm ?: 0.0, 0.001)
+    }
+
+    @Test
+    fun ignoresOldOverlayWhenParsingStructuredOfferWithoutPlatform() {
+        val result = parser.parse(
+            """
+            REVISAR
+            ${'$'} 5472
+            ${'$'} 531/km - ${'$'} -/h
+            - min - 10,3 km
+            Tiempo incompleto
+
+            2 Comfort Exclusivo
+            8.780 ARS
+            A6 min (2.5 km) de distancia
+            Viaje de 26 min (12.2 km)
+            Aceptar
+            """.trimIndent()
+        )
+
+        assertNotNull(result)
+        assertEquals(8780.0, result?.fareAmount ?: 0.0, 0.001)
+        assertEquals(6.0, result?.pickupMinutes ?: 0.0, 0.001)
+        assertEquals(2.5, result?.pickupKm ?: 0.0, 0.001)
+        assertEquals(26.0, result?.tripMinutes ?: 0.0, 0.001)
+        assertEquals(12.2, result?.tripKm ?: 0.0, 0.001)
+        assertEquals(null, result?.platform)
+    }
+
+    @Test
     fun parsesUberOfferWithJoinedTripPrefixVariants() {
         listOf(
             "Viaje26 min (11.9 km)",
