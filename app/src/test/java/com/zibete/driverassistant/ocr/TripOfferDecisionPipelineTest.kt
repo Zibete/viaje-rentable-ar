@@ -63,6 +63,21 @@ class TripOfferDecisionPipelineTest {
     }
 
     @Test
+    fun returnsNoTripDetectedForStructuredOfferWithoutActionMarker() {
+        val result = pipeline.analyzeRecognizedText(
+            rawText = """
+                2 Comfort Exclusivo
+                8.780 ARS
+                A6 min (2.5 km) de distancia
+                Viaje de 26 min (12.2 km)
+            """.trimIndent(),
+            config = config
+        )
+
+        assertEquals(TripOfferAnalysisResult.NoTripDetected, result)
+    }
+
+    @Test
     fun letsCalculatorReviewPartialParsedData() {
         val result = pipeline.analyzeRecognizedText(
             rawText = """
@@ -75,6 +90,79 @@ class TripOfferDecisionPipelineTest {
         val decision = result as TripOfferAnalysisResult.DecisionReady
         assertEquals(DriverDecision.REVIEW, decision.result.decision)
         assertTrue(decision.result.reviewReasons.any { it.contains("incompleto") })
+    }
+
+    @Test
+    fun calculatesDecisionFromStructuredOfferWithoutPlatform() {
+        val result = pipeline.analyzeRecognizedText(
+            rawText = """
+                2 Comfort Exclusivo
+                8.780 ARS
+                A6 min (2.5 km) de distancia
+                Viaje de 26 min (12.2 km)
+                Aceptar
+            """.trimIndent(),
+            config = config
+        )
+
+        val decision = result as TripOfferAnalysisResult.DecisionReady
+        assertEquals(DriverDecision.REVIEW, decision.result.decision)
+        assertEquals(8780.0, decision.result.fareAmount ?: 0.0, 0.001)
+        assertEquals(14.7, decision.result.totalKm ?: 0.0, 0.001)
+        assertEquals(32.0, decision.result.totalMinutes ?: 0.0, 0.001)
+        assertTrue(decision.result.reviewReasons.none { it.contains("Tiempo incompleto") })
+        assertTrue(decision.result.reviewReasons.any { it.contains("Plataforma no detectada") })
+    }
+
+    @Test
+    fun calculatesDecisionFromStructuredOfferWithEmparejarVariants() {
+        listOf(
+            "Emparejar",
+            "Ejar",
+            "Empajar",
+            "Emparej ar"
+        ).forEach { actionMarker ->
+            val result = pipeline.analyzeRecognizedText(
+                rawText = """
+                    2 Comfort Exclusivo
+                    8.780 ARS
+                    A6 min (2.5 km) de distancia
+                    Viaje de 26 min (12.2 km)
+                    $actionMarker
+                """.trimIndent(),
+                config = config
+            )
+
+            val decision = result as TripOfferAnalysisResult.DecisionReady
+            assertEquals(actionMarker, 8780.0, decision.result.fareAmount ?: 0.0, 0.001)
+            assertEquals(actionMarker, 32.0, decision.result.totalMinutes ?: 0.0, 0.001)
+        }
+    }
+
+    @Test
+    fun calculatesDecisionFromNewStructuredOfferWhenOldOverlayTextIsPresent() {
+        val result = pipeline.analyzeRecognizedText(
+            rawText = """
+                REVISAR
+                ${'$'} 5472
+                ${'$'} 531/km - ${'$'} -/h
+                - min - 10,3 km
+                Tiempo incompleto
+
+                2 Comfort Exclusivo
+                8.780 ARS
+                A6 min (2.5 km) de distancia
+                Viaje de 26 min (12.2 km)
+                Aceptar
+            """.trimIndent(),
+            config = config
+        )
+
+        val decision = result as TripOfferAnalysisResult.DecisionReady
+        assertEquals(8780.0, decision.result.fareAmount ?: 0.0, 0.001)
+        assertEquals(14.7, decision.result.totalKm ?: 0.0, 0.001)
+        assertEquals(32.0, decision.result.totalMinutes ?: 0.0, 0.001)
+        assertTrue(decision.result.reviewReasons.none { it.contains("Tiempo incompleto") })
     }
 
     @Test

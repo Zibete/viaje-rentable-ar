@@ -2,6 +2,7 @@ package com.zibete.driverassistant.ocr
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class TripOfferTextParserTest {
@@ -303,6 +304,140 @@ class TripOfferTextParserTest {
         assertEquals(26.0, result?.tripMinutes ?: 0.0, 0.001)
         assertEquals(11.9, result?.tripKm ?: 0.0, 0.001)
         assertEquals("uber", result?.platform)
+    }
+
+    @Test
+    fun parsesStructuredOfferWithoutPlatform() {
+        val result = parser.parse(
+            """
+            2 Comfort Exclusivo
+            8.780 ARS
+            A6 min (2.5 km) de distancia
+            Viaje de 26 min (12.2 km)
+            Aceptar
+            """.trimIndent()
+        )
+
+        assertNotNull(result)
+        assertEquals(8780.0, result?.fareAmount ?: 0.0, 0.001)
+        assertEquals(6.0, result?.pickupMinutes ?: 0.0, 0.001)
+        assertEquals(2.5, result?.pickupKm ?: 0.0, 0.001)
+        assertEquals(26.0, result?.tripMinutes ?: 0.0, 0.001)
+        assertEquals(12.2, result?.tripKm ?: 0.0, 0.001)
+        assertEquals(null, result?.platform)
+    }
+
+    @Test
+    fun sumsAdditionalFareWhenBaseFareExists() {
+        val result = parser.parse(
+            """
+            7.915 ARS
+            DNI verificado * 5,00 (104)
+            +914,00 ARS adicionales por
+            """.trimIndent()
+        )
+
+        assertNotNull(result)
+        assertEquals(8829.0, result?.fareAmount ?: 0.0, 0.001)
+    }
+
+    @Test
+    fun keepsBaseFareWhenNoAdditionalFareExists() {
+        val result = parser.parse("7.915 ARS")
+
+        assertNotNull(result)
+        assertEquals(7915.0, result?.fareAmount ?: 0.0, 0.001)
+    }
+
+    @Test
+    fun doesNotUseAdditionalFareAsMainFareWithoutBaseFare() {
+        val result = parser.parse("+914,00 ARS adicionales por")
+
+        assertTrue(result == null || result.fareAmount == null)
+    }
+
+    @Test
+    fun parsesAdditionalFareFormatVariants() {
+        listOf(
+            "+914,00 ARS adicionales",
+            "+ 914,00 ARS adicionales",
+            "914,00 ARS adicionales",
+            "+914 ARS adicional",
+            "+914,00 ARS adicionales por"
+        ).forEach { additionalLine ->
+            val result = parser.parse(
+                """
+                7.915 ARS
+                $additionalLine
+                """.trimIndent()
+            )
+
+            assertNotNull(result)
+            assertEquals(additionalLine, 8829.0, result?.fareAmount ?: 0.0, 0.001)
+        }
+    }
+
+    @Test
+    fun parsesStructuredOfferWithoutPlatformAndAddsAdditionalFare() {
+        val result = parser.parse(
+            """
+            2 Comfort Exclusivo
+            7.915 ARS
+            +914,00 ARS adicionales por
+            A6 min (2.5 km) de distancia
+            Viaje de 26 min (12.2 km)
+            Aceptar
+            """.trimIndent()
+        )
+
+        assertNotNull(result)
+        assertEquals(8829.0, result?.fareAmount ?: 0.0, 0.001)
+        assertEquals(6.0, result?.pickupMinutes ?: 0.0, 0.001)
+        assertEquals(2.5, result?.pickupKm ?: 0.0, 0.001)
+        assertEquals(26.0, result?.tripMinutes ?: 0.0, 0.001)
+        assertEquals(12.2, result?.tripKm ?: 0.0, 0.001)
+    }
+
+    @Test
+    fun parsesJoinedPickupMinutesWithoutPlatform() {
+        val result = parser.parse(
+            """
+            8.780 ARS
+            A6 min (2.5 km) de distancia
+            Viaje de 26 min (12.2 km)
+            """.trimIndent()
+        )
+
+        assertNotNull(result)
+        assertEquals(6.0, result?.pickupMinutes ?: 0.0, 0.001)
+        assertEquals(2.5, result?.pickupKm ?: 0.0, 0.001)
+    }
+
+    @Test
+    fun ignoresOldOverlayWhenParsingStructuredOfferWithoutPlatform() {
+        val result = parser.parse(
+            """
+            REVISAR
+            ${'$'} 5472
+            ${'$'} 531/km - ${'$'} -/h
+            - min - 10,3 km
+            Tiempo incompleto
+
+            2 Comfort Exclusivo
+            8.780 ARS
+            A6 min (2.5 km) de distancia
+            Viaje de 26 min (12.2 km)
+            Aceptar
+            """.trimIndent()
+        )
+
+        assertNotNull(result)
+        assertEquals(8780.0, result?.fareAmount ?: 0.0, 0.001)
+        assertEquals(6.0, result?.pickupMinutes ?: 0.0, 0.001)
+        assertEquals(2.5, result?.pickupKm ?: 0.0, 0.001)
+        assertEquals(26.0, result?.tripMinutes ?: 0.0, 0.001)
+        assertEquals(12.2, result?.tripKm ?: 0.0, 0.001)
+        assertEquals(null, result?.platform)
     }
 
     @Test

@@ -35,12 +35,46 @@ class TripOfferPresenceValidatorTest {
     }
 
     @Test
+    fun acceptsEmparejarOcrVariantsNearBottom() {
+        listOf(
+            "Ejar",
+            "Empajar",
+            "Emparej ar",
+            "Empareiar",
+            "Enparejar"
+        ).forEach { actionMarker ->
+            val rawText = """
+                2 Comfort Exclusivo
+                8780 ARS
+                A6 min (2.5 km) de distancia
+                Viaje de 26 min (12.2 km)
+                $actionMarker
+            """.trimIndent()
+
+            assertTrue(actionMarker, validator.hasActiveOffer(rawText))
+        }
+    }
+
+    @Test
     fun rejectsScreenWithoutActionMarker() {
         val rawText = """
             UberX
             5472 ARS
             A 3 min (1.3 km) de distancia
             Viaje de 26 min (11.9 km)
+        """.trimIndent()
+
+        assertFalse(validator.hasActiveOffer(rawText))
+    }
+
+    @Test
+    fun rejectsGenericBottomWordsThatAreNotActionMarkers() {
+        val rawText = """
+            2 Comfort Exclusivo
+            8780 ARS
+            A6 min (2.5 km) de distancia
+            Viaje de 26 min (12.2 km)
+            Ver detalles
         """.trimIndent()
 
         assertFalse(validator.hasActiveOffer(rawText))
