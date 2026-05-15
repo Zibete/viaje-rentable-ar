@@ -9,6 +9,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.graphics.Bitmap
+import android.graphics.Color
 import android.graphics.PixelFormat
 import android.hardware.display.DisplayManager
 import android.hardware.display.VirtualDisplay
@@ -40,12 +41,14 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.math.roundToInt
 
 class ScreenCaptureMonitorService : Service() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val textRecognizer = MlKitScreenTextRecognizer()
     private val decisionPipeline = TripOfferDecisionPipeline()
     private val detectionState = TripOfferDetectionState()
+    private val frameGate = OcrFrameGate()
     private val isProcessingFrame = AtomicBoolean(false)
 
     @Volatile
@@ -149,11 +152,20 @@ class ScreenCaptureMonitorService : Service() {
         projection.registerCallback(requireNotNull(projectionCallback), handler)
 
         val metrics = resources.displayMetrics
-        val width = metrics.widthPixels.takeIf { it > 0 } ?: FALLBACK_CAPTURE_SIZE
-        val height = metrics.heightPixels.takeIf { it > 0 } ?: FALLBACK_CAPTURE_SIZE
+        val rawWidth = metrics.widthPixels.takeIf { it > 0 } ?: FALLBACK_CAPTURE_SIZE
+        val rawHeight = metrics.heightPixels.takeIf { it > 0 } ?: FALLBACK_CAPTURE_SIZE
+        val captureWidth = rawWidth.coerceAtMost(MAX_CAPTURE_WIDTH)
+        val captureHeight = ((rawHeight.toFloat() * captureWidth) / rawWidth)
+            .roundToInt()
+            .coerceAtLeast(FALLBACK_CAPTURE_SIZE)
         val densityDpi = metrics.densityDpi.takeIf { it > 0 } ?: DisplayMetrics.DENSITY_DEFAULT
 
-        imageReader = ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, IMAGE_BUFFER_SIZE).apply {
+        imageReader = ImageReader.newInstance(
+            captureWidth,
+            captureHeight,
+            PixelFormat.RGBA_8888,
+            IMAGE_BUFFER_SIZE
+        ).apply {
             setOnImageAvailableListener({ reader ->
                 handleImageAvailable(reader)
             }, handler)
@@ -162,15 +174,20 @@ class ScreenCaptureMonitorService : Service() {
         runCatching {
             virtualDisplay = projection.createVirtualDisplay(
                 "DriverAssistantScreenMonitor",
-                width,
-                height,
+                captureWidth,
+                captureHeight,
                 densityDpi,
                 DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
                 imageReader?.surface,
                 null,
                 handler
             )
+            frameGate.reset()
             nextFrameAtMillis = 0L
+            DriverAssistantDebugLogger.log(
+                "monitor capture size",
+                "raw=${rawWidth}x$rawHeight, capture=${captureWidth}x$captureHeight, maxWidth=$MAX_CAPTURE_WIDTH"
+            )
             publishStatus(ScreenCaptureMonitorStatus.MONITORING)
         }.onFailure { error ->
             publishStatus(
@@ -185,17 +202,14 @@ class ScreenCaptureMonitorService : Service() {
         val now = System.currentTimeMillis()
         val image = runCatching { reader.acquireLatestImage() }.getOrNull() ?: return
 
-        if (now < nextFrameAtMillis || !isProcessingFrame.compareAndSet(false, true)) {
+        if (now < nextFrameAtMillis) {
             image.close()
             return
         }
-        nextFrameAtMillis = now + CAPTURE_INTERVAL_MILLIS
-        publishStatus(ScreenCaptureMonitorStatus.ANALYZING)
 
         val bitmap = runCatching { image.toMonitorBitmap() }
             .onFailure { error ->
                 image.close()
-                isProcessingFrame.set(false)
                 publishStatus(
                     status = ScreenCaptureMonitorStatus.ERROR,
                     errorMessage = error.message ?: "No se pudo preparar el frame para OCR."
@@ -204,11 +218,49 @@ class ScreenCaptureMonitorService : Service() {
             .getOrNull() ?: return
         image.close()
 
+        val gateDecision = runCatching {
+            frameGate.evaluate(
+                signature = bitmap.toMonitorFrameSignature(),
+                nowMillis = now
+            )
+        }.onFailure { error ->
+            bitmap.recycle()
+            publishStatus(
+                status = ScreenCaptureMonitorStatus.ERROR,
+                errorMessage = error.message ?: "No se pudo evaluar el frame de monitoreo."
+            )
+        }.getOrNull() ?: return
+
+        nextFrameAtMillis = now + gateDecision.nextFrameDelayMillis
+
+        if (!gateDecision.shouldRunOcr) {
+            DriverAssistantDebugLogger.log(
+                "monitor OCR skipped",
+                "reason=${gateDecision.reason}, changeScore=${gateDecision.changeScore}, " +
+                    "nextDelay=${gateDecision.nextFrameDelayMillis}"
+            )
+            bitmap.recycle()
+            return
+        }
+
+        if (!isProcessingFrame.compareAndSet(false, true)) {
+            DriverAssistantDebugLogger.log("monitor OCR skipped", "reason=ocr already processing")
+            bitmap.recycle()
+            return
+        }
+
+        DriverAssistantDebugLogger.log(
+            "monitor OCR started",
+            "reason=${gateDecision.reason}, changeScore=${gateDecision.changeScore}, bitmap=${bitmap.width}x${bitmap.height}"
+        )
+        publishStatus(ScreenCaptureMonitorStatus.ANALYZING)
+
         textRecognizer.recognizeText(bitmap) { ocrResult ->
             bitmap.recycle()
-            DriverAssistantDebugLogger.log("monitor ocrStatus", ocrResult.status)
-            DriverAssistantDebugLogger.log("monitor raw OCR", ocrResult.rawText)
-            DriverAssistantDebugLogger.log("monitor ocrError", ocrResult.errorMessage)
+            DriverAssistantDebugLogger.log(
+                "monitor OCR completed",
+                "status=${ocrResult.status}, textLength=${ocrResult.rawText?.length ?: 0}, error=${ocrResult.errorMessage}"
+            )
             when (ocrResult.status) {
                 OcrStatus.TEXT_DETECTED -> analyzeRecognizedText(ocrResult.rawText)
                 OcrStatus.NO_TEXT -> markNoOffer(ocrResult.rawText, ocrResult.status)
@@ -230,7 +282,7 @@ class ScreenCaptureMonitorService : Service() {
     }
 
     private fun analyzeRecognizedText(rawText: String?) {
-        DriverAssistantDebugLogger.log("monitor analyze rawText", rawText)
+        DriverAssistantDebugLogger.log("monitor analyze textLength", rawText?.length ?: 0)
         when (val analysis = decisionPipeline.analyzeRecognizedText(rawText, currentConfig)) {
             TripOfferAnalysisResult.NoText -> {
                 DriverAssistantDebugLogger.log("monitor analysis", "NoText")
@@ -256,8 +308,8 @@ class ScreenCaptureMonitorService : Service() {
                 }
                 DriverAssistantDebugLogger.log(
                     "monitor decision summary",
-                    "input=${analysis.input}, result=$result, hasCompleteData=$hasCompleteData, " +
-                        "shouldShowOverlay=$shouldShowOverlay, overlayUpdated=$overlayUpdated"
+                    "hasCompleteData=$hasCompleteData, shouldShowOverlay=$shouldShowOverlay, " +
+                        "overlayUpdated=$overlayUpdated, decision=${result.decision}"
                 )
                 publishStatus(
                     status = if (hasCompleteData) {
@@ -405,7 +457,9 @@ class ScreenCaptureMonitorService : Service() {
     }
 
     private fun releaseCaptureResources() {
+        frameGate.reset()
         detectionState.reset()
+        isProcessingFrame.set(false)
         runCatching { virtualDisplay?.release() }
         runCatching { imageReader?.close() }
         projectionCallback?.let { callback ->
@@ -447,9 +501,9 @@ class ScreenCaptureMonitorService : Service() {
         private const val NOTIFICATION_CHANNEL_ID = "screen_capture_monitor_service"
         private const val NOTIFICATION_ID = 4301
         private const val STOP_REQUEST_CODE = 4302
-        private const val CAPTURE_INTERVAL_MILLIS = 1_000L
+        private const val MAX_CAPTURE_WIDTH = 720
         private const val NO_OFFER_STATUS_THRESHOLD = 2
-        private const val IMAGE_BUFFER_SIZE = 2
+        private const val IMAGE_BUFFER_SIZE = 1
         private const val FALLBACK_CAPTURE_SIZE = 1
 
         fun buildStartIntent(
@@ -481,4 +535,36 @@ private fun Image.toMonitorBitmap(): Bitmap {
             paddedBitmap.recycle()
         }
     }
+}
+
+private fun Bitmap.toMonitorFrameSignature(
+    columns: Int = 8,
+    rows: Int = 8,
+    cropTopRatio: Float = 0.45f
+): FrameSignature {
+    val startY = (height * cropTopRatio).roundToInt().coerceIn(0, height - 1)
+    val roiHeight = (height - startY).coerceAtLeast(1)
+    val values = ArrayList<Int>(columns * rows)
+
+    repeat(rows) { row ->
+        repeat(columns) { column ->
+            val x = (((column + 0.5f) / columns) * width)
+                .roundToInt()
+                .coerceIn(0, width - 1)
+            val y = startY + ((((row + 0.5f) / rows) * roiHeight)
+                .roundToInt()
+                .coerceIn(0, roiHeight - 1))
+            values += getPixel(x, y).luminance()
+        }
+    }
+
+    return FrameSignature(values)
+}
+
+private fun Int.luminance(): Int {
+    return ((Color.red(this) * 0.299f) +
+        (Color.green(this) * 0.587f) +
+        (Color.blue(this) * 0.114f))
+        .roundToInt()
+        .coerceIn(0, 255)
 }
