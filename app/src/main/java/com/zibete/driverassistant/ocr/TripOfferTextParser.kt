@@ -5,17 +5,23 @@ import com.zibete.driverassistant.debug.DriverAssistantDebugLogger
 class TripOfferTextParser(
     private val textSanitizer: RecognizedTextSanitizer = RecognizedTextSanitizer()
 ) {
-    fun parse(rawText: String): TripOfferCandidate? {
-        DriverAssistantDebugLogger.log("parser rawText", rawText)
+    fun parse(rawText: String, traceId: String? = null): TripOfferCandidate? {
+        DriverAssistantDebugLogger.log(
+            "parser raw text",
+            "traceId=${traceId.orNone()}, textLength=${rawText.length}"
+        )
         if (rawText.isBlank()) {
-            DriverAssistantDebugLogger.log("parser result", "blank raw text")
+            DriverAssistantDebugLogger.log("parser result", "traceId=${traceId.orNone()}, result=blank raw text")
             return null
         }
 
         val sanitizedText = textSanitizer.sanitize(rawText)
-        DriverAssistantDebugLogger.log("parser sanitizedText", sanitizedText)
+        DriverAssistantDebugLogger.log(
+            "parser sanitized text",
+            "traceId=${traceId.orNone()}, sanitizedTextLength=${sanitizedText.length}"
+        )
         if (sanitizedText.isBlank()) {
-            DriverAssistantDebugLogger.log("parser result", "blank sanitized text")
+            DriverAssistantDebugLogger.log("parser result", "traceId=${traceId.orNone()}, result=blank sanitized text")
             return null
         }
 
@@ -62,14 +68,14 @@ class TripOfferTextParser(
 
         DriverAssistantDebugLogger.log(
             "parser extracted fields",
-            "platform=$platform, hasStructuredTripFields=$hasStructuredTripFields, " +
-                "structuredTripFields=$structuredTripFields, genericDistances=$genericDistances, " +
-                "genericTimes=$genericTimes, fare=$fare, pickupKm=$pickupKm, tripKm=$tripKm, " +
-                "pickupMinutes=$pickupMinutes, tripMinutes=$tripMinutes"
+            "traceId=${traceId.orNone()}, fare=$fare, pickupKm=$pickupKm, tripKm=$tripKm, " +
+                "pickupMinutes=$pickupMinutes, tripMinutes=$tripMinutes, platform=$platform, " +
+                "hasStructuredTripFields=$hasStructuredTripFields, genericDistanceCount=${genericDistances.size}, " +
+                "genericTimeCount=${genericTimes.size}"
         )
 
         if (fare == null && pickupKm == null && tripKm == null && pickupMinutes == null && tripMinutes == null && platform == null) {
-            DriverAssistantDebugLogger.log("parser result", "no trip fields detected")
+            DriverAssistantDebugLogger.log("parser result", "traceId=${traceId.orNone()}, result=no trip fields detected")
             return null
         }
 
@@ -90,9 +96,16 @@ class TripOfferTextParser(
             rawText = sanitizedText,
             confidence = parsedFields.size / ParsedTripField.entries.size.toDouble()
         )
-        DriverAssistantDebugLogger.log("parser candidate", candidate)
+        DriverAssistantDebugLogger.log(
+            "parser candidate summary",
+            "traceId=${traceId.orNone()}, fare=${candidate.fareAmount}, pickupKm=${candidate.pickupKm}, " +
+                "tripKm=${candidate.tripKm}, pickupMinutes=${candidate.pickupMinutes}, " +
+                "tripMinutes=${candidate.tripMinutes}, platform=${candidate.platform}, confidence=${candidate.confidence}"
+        )
         return candidate
     }
+
+    private fun String?.orNone(): String = this ?: "none"
 
     private fun parseFare(rawText: String): Double? {
         val baseFare = parseBaseFare(rawText)

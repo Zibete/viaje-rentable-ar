@@ -34,7 +34,6 @@ import com.zibete.driverassistant.ocr.TripOfferAnalysisResult
 import com.zibete.driverassistant.ocr.TripOfferDecisionPipeline
 import com.zibete.driverassistant.overlay.DriverDecisionOverlayService
 import com.zibete.driverassistant.overlay.OverlayCardState
-import com.zibete.driverassistant.overlay.hasCompleteOverlayData
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -49,6 +48,7 @@ class ScreenCaptureMonitorService : Service() {
     private val decisionPipeline = TripOfferDecisionPipeline()
     private val detectionState = TripOfferDetectionState()
     private val frameGate = OcrFrameGate()
+    private val traceIdGenerator = OcrTraceIdGenerator()
     private val isProcessingFrame = AtomicBoolean(false)
 
     @Volatile
@@ -250,21 +250,24 @@ class ScreenCaptureMonitorService : Service() {
             return
         }
 
+        val traceId = traceIdGenerator.next(now)
         DriverAssistantDebugLogger.log(
             "monitor OCR started",
-            "reason=${gateDecision.reason}, changeScore=${gateDecision.changeScore}, bitmap=${bitmap.width}x${bitmap.height}"
+            "traceId=$traceId, reason=${gateDecision.reason}, changeScore=${gateDecision.changeScore}, " +
+                "bitmap=${bitmap.width}x${bitmap.height}"
         )
         publishStatus(ScreenCaptureMonitorStatus.ANALYZING)
 
-        textRecognizer.recognizeText(bitmap) { ocrResult ->
+        textRecognizer.recognizeText(bitmap, traceId) { ocrResult ->
             bitmap.recycle()
             DriverAssistantDebugLogger.log(
                 "monitor OCR completed",
-                "status=${ocrResult.status}, textLength=${ocrResult.rawText?.length ?: 0}, error=${ocrResult.errorMessage}"
+                "traceId=$traceId, status=${ocrResult.status}, textLength=${ocrResult.rawText?.length ?: 0}, " +
+                    "error=${ocrResult.errorMessage}"
             )
             when (ocrResult.status) {
-                OcrStatus.TEXT_DETECTED -> analyzeRecognizedText(ocrResult.rawText)
-                OcrStatus.NO_TEXT -> markNoOffer(ocrResult.rawText, ocrResult.status)
+                OcrStatus.TEXT_DETECTED -> analyzeRecognizedText(ocrResult.rawText, traceId)
+                OcrStatus.NO_TEXT -> markNoOffer(ocrResult.rawText, ocrResult.status, traceId)
                 OcrStatus.ERROR -> publishStatus(
                     status = ScreenCaptureMonitorStatus.ERROR,
                     recognizedText = ocrResult.rawText,
@@ -282,25 +285,34 @@ class ScreenCaptureMonitorService : Service() {
         }
     }
 
-    private fun analyzeRecognizedText(rawText: String?) {
-        DriverAssistantDebugLogger.log("monitor analyze textLength", rawText?.length ?: 0)
-        when (val analysis = decisionPipeline.analyzeRecognizedText(rawText, currentConfig)) {
+    private fun analyzeRecognizedText(rawText: String?, traceId: String) {
+        DriverAssistantDebugLogger.log(
+            "monitor analyze textLength",
+            "traceId=$traceId, textLength=${rawText?.length ?: 0}"
+        )
+        when (val analysis = decisionPipeline.analyzeRecognizedText(rawText, currentConfig, traceId)) {
             TripOfferAnalysisResult.NoText -> {
-                DriverAssistantDebugLogger.log("monitor analysis", "NoText")
-                markNoOffer(rawText, OcrStatus.NO_TEXT)
+                DriverAssistantDebugLogger.log("monitor analysis", "traceId=$traceId, result=NoText")
+                markNoOffer(rawText, OcrStatus.NO_TEXT, traceId)
             }
             TripOfferAnalysisResult.NoTripDetected -> {
-                DriverAssistantDebugLogger.log("monitor analysis", "NoTripDetected")
-                markNoOffer(rawText, OcrStatus.TEXT_DETECTED)
+                DriverAssistantDebugLogger.log("monitor analysis", "traceId=$traceId, result=NoTripDetected")
+                markNoOffer(rawText, OcrStatus.TEXT_DETECTED, traceId)
             }
             is TripOfferAnalysisResult.DecisionReady -> {
                 noOfferCycles = 0
                 val result = analysis.result
-                val hasCompleteData = result.hasCompleteOverlayData()
+                val hasCompleteData = result.hasCompleteMonitorOverlayData()
+                val missingOverlayFields = result.missingOverlayFields()
                 val shouldShowOverlay = !hasCompleteData ||
                     detectionState.shouldShowOverlay(analysis.input)
+                val overlayReason = when {
+                    !hasCompleteData -> "incomplete data"
+                    shouldShowOverlay -> "new decision"
+                    else -> "duplicate complete offer"
+                }
                 val overlayUpdated = if (shouldShowOverlay) {
-                    startDecisionOverlay(result)
+                    startDecisionOverlay(result, traceId, overlayReason)
                 } else {
                     false
                 }
@@ -309,8 +321,11 @@ class ScreenCaptureMonitorService : Service() {
                 }
                 DriverAssistantDebugLogger.log(
                     "monitor decision summary",
-                    "hasCompleteData=$hasCompleteData, shouldShowOverlay=$shouldShowOverlay, " +
-                        "overlayUpdated=$overlayUpdated, decision=${result.decision}"
+                    "traceId=$traceId, hasCompleteData=$hasCompleteData, " +
+                        "missingOverlayFields=$missingOverlayFields, shouldShowOverlay=$shouldShowOverlay, " +
+                        "overlayUpdated=$overlayUpdated, overlayReason=$overlayReason, decision=${result.decision}, " +
+                        "fare=${result.fareAmount}, arsPerKm=${result.arsPerKm}, arsPerHour=${result.arsPerHour}, " +
+                        "totalKm=${result.totalKm}, totalMinutes=${result.totalMinutes}"
                 )
                 publishStatus(
                     status = if (hasCompleteData) {
@@ -327,7 +342,7 @@ class ScreenCaptureMonitorService : Service() {
         }
     }
 
-    private fun markNoOffer(rawText: String?, ocrStatus: OcrStatus) {
+    private fun markNoOffer(rawText: String?, ocrStatus: OcrStatus, traceId: String? = null) {
         noOfferCycles += 1
         val status = if (noOfferCycles >= NO_OFFER_STATUS_THRESHOLD) {
             detectionState.reset()
@@ -336,6 +351,11 @@ class ScreenCaptureMonitorService : Service() {
         } else {
             ScreenCaptureMonitorStatus.MONITORING
         }
+        DriverAssistantDebugLogger.log(
+            "monitor no offer",
+            "traceId=${traceId ?: "none"}, ocrStatus=$ocrStatus, textLength=${rawText?.length ?: 0}, " +
+                "noOfferCycles=$noOfferCycles, status=$status"
+        )
         publishStatus(
             status = status,
             recognizedText = rawText,
@@ -343,8 +363,16 @@ class ScreenCaptureMonitorService : Service() {
         )
     }
 
-    private fun startDecisionOverlay(result: TripDecisionResult): Boolean {
+    private fun startDecisionOverlay(
+        result: TripDecisionResult,
+        traceId: String,
+        reason: String
+    ): Boolean {
         if (!Settings.canDrawOverlays(this)) {
+            DriverAssistantDebugLogger.log(
+                "monitor overlay shown",
+                "traceId=$traceId, shown=false, reason=missing overlay permission"
+            )
             publishStatus(
                 status = ScreenCaptureMonitorStatus.ERROR,
                 errorMessage = "Oferta detectada, pero falta permiso overlay para mostrar la decision."
@@ -371,7 +399,26 @@ class ScreenCaptureMonitorService : Service() {
             startService(intent)
         }
         overlayVisible = true
+        DriverAssistantDebugLogger.log(
+            "monitor overlay shown",
+            "traceId=$traceId, shown=true, reason=$reason, visualState=${overlayState.visualState}, " +
+                "title=${overlayState.titleText}"
+        )
         return true
+    }
+
+    private fun TripDecisionResult.missingOverlayFields(): List<String> {
+        return buildList {
+            if (fareAmount == null) add("fare")
+            if (totalKm == null) add("totalKm")
+            if (totalMinutes == null) add("totalMinutes")
+            if (arsPerKm == null) add("arsPerKm")
+            if (arsPerHour == null) add("arsPerHour")
+        }
+    }
+
+    private fun TripDecisionResult.hasCompleteMonitorOverlayData(): Boolean {
+        return missingOverlayFields().isEmpty()
     }
 
     private fun hideDecisionOverlay(reason: String) {

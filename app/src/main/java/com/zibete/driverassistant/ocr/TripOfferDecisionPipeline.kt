@@ -15,38 +15,62 @@ class TripOfferDecisionPipeline(
 ) {
     fun analyzeRecognizedText(
         rawText: String?,
-        config: DriverConfig
+        config: DriverConfig,
+        traceId: String? = null
     ): TripOfferAnalysisResult {
-        DriverAssistantDebugLogger.log("pipeline rawText", rawText)
+        DriverAssistantDebugLogger.log(
+            "pipeline raw text",
+            "traceId=${traceId.orNone()}, present=${!rawText.isNullOrBlank()}, textLength=${rawText?.length ?: 0}"
+        )
         if (rawText.isNullOrBlank()) {
-            DriverAssistantDebugLogger.log("pipeline result", "NoText")
+            DriverAssistantDebugLogger.log("pipeline presence result", "traceId=${traceId.orNone()}, activeOffer=false, reason=NoText")
             return TripOfferAnalysisResult.NoText
         }
 
         if (!presenceValidator.hasActiveOffer(rawText)) {
-            DriverAssistantDebugLogger.log("pipeline result", "No active offer action marker")
+            DriverAssistantDebugLogger.log(
+                "pipeline presence result",
+                "traceId=${traceId.orNone()}, activeOffer=false, reason=no active offer action marker"
+            )
             return TripOfferAnalysisResult.NoTripDetected
         }
+        DriverAssistantDebugLogger.log("pipeline presence result", "traceId=${traceId.orNone()}, activeOffer=true")
 
-        val candidate = parser.parse(rawText)
+        val candidate = parser.parse(rawText, traceId)
             ?: run {
-                DriverAssistantDebugLogger.log("pipeline result", "NoTripDetected")
+                DriverAssistantDebugLogger.log("pipeline result", "traceId=${traceId.orNone()}, result=NoTripDetected")
                 return TripOfferAnalysisResult.NoTripDetected
             }
-        DriverAssistantDebugLogger.log("pipeline candidate", candidate)
+        DriverAssistantDebugLogger.log(
+            "pipeline candidate summary",
+            "traceId=${traceId.orNone()}, fare=${candidate.fareAmount}, pickupKm=${candidate.pickupKm}, " +
+                "tripKm=${candidate.tripKm}, pickupMinutes=${candidate.pickupMinutes}, " +
+                "tripMinutes=${candidate.tripMinutes}, platform=${candidate.platform}, confidence=${candidate.confidence}"
+        )
 
         val input = candidate.toTripOfferInput()
-        DriverAssistantDebugLogger.log("pipeline input", input)
+        DriverAssistantDebugLogger.log(
+            "pipeline input summary",
+            "traceId=${traceId.orNone()}, fare=${input.fareAmount}, pickupKm=${input.pickupKm}, " +
+                "tripKm=${input.tripKm}, pickupMinutes=${input.pickupMinutes}, " +
+                "tripMinutes=${input.tripMinutes}, platform=${input.platform}"
+        )
 
         val zoneMatch = zoneMatcher.findMatch(candidate.rawText, config.avoidZones)
-        DriverAssistantDebugLogger.log("pipeline zoneMatch", zoneMatch)
+        DriverAssistantDebugLogger.log("pipeline zone match", "traceId=${traceId.orNone()}, zoneMatch=$zoneMatch")
 
         val result = calculator.calculate(
             input = input,
             config = config,
             zoneMatch = zoneMatch
         )
-        DriverAssistantDebugLogger.log("pipeline decisionResult", result)
+        DriverAssistantDebugLogger.log(
+            "pipeline decision result summary",
+            "traceId=${traceId.orNone()}, decision=${result.decision}, fare=${result.fareAmount}, " +
+                "arsPerKm=${result.arsPerKm}, arsPerHour=${result.arsPerHour}, totalKm=${result.totalKm}, " +
+                "totalMinutes=${result.totalMinutes}, rejectionReasons=${result.rejectionReasons}, " +
+                "reviewReasons=${result.reviewReasons}"
+        )
 
         return TripOfferAnalysisResult.DecisionReady(
             result = result,
@@ -65,6 +89,8 @@ class TripOfferDecisionPipeline(
             rawText = rawText
         )
     }
+
+    private fun String?.orNone(): String = this ?: "none"
 }
 
 sealed interface TripOfferAnalysisResult {
