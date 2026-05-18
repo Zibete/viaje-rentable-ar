@@ -242,6 +242,8 @@ class ScreenCaptureMonitorService : Service() {
             DriverAssistantDebugLogger.log(
                 "monitor OCR skipped",
                 "reason=${gateDecision.reason}, changeScore=${gateDecision.changeScore}, " +
+                    "threshold=${gateDecision.threshold}, cooldownActive=${gateDecision.cooldownActive}, " +
+                    "millisSinceLastOcr=${gateDecision.millisSinceLastOcr}, " +
                     "nextDelay=${gateDecision.nextFrameDelayMillis}"
             )
             bitmap.recycle()
@@ -258,6 +260,8 @@ class ScreenCaptureMonitorService : Service() {
         DriverAssistantDebugLogger.log(
             "monitor OCR started",
             "traceId=$traceId, reason=${gateDecision.reason}, changeScore=${gateDecision.changeScore}, " +
+                "threshold=${gateDecision.threshold}, cooldownActive=${gateDecision.cooldownActive}, " +
+                "millisSinceLastOcr=${gateDecision.millisSinceLastOcr}, " +
                 "bitmap=${bitmap.width}x${bitmap.height}"
         )
         publishStatus(ScreenCaptureMonitorStatus.ANALYZING)
@@ -684,9 +688,9 @@ private fun Image.toMonitorBitmap(): Bitmap {
 }
 
 private fun Bitmap.toMonitorFrameSignature(
-    columns: Int = 8,
-    rows: Int = 8,
-    cropTopRatio: Float = 0.45f
+    columns: Int = 12,
+    rows: Int = 10,
+    cropTopRatio: Float = 0.42f
 ): FrameSignature {
     val startY = (height * cropTopRatio).roundToInt().coerceIn(0, height - 1)
     val roiHeight = (height - startY).coerceAtLeast(1)
