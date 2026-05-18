@@ -5,6 +5,7 @@ import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.TextRecognizer
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
+import com.zibete.driverassistant.debug.DriverAssistantDebugLogger
 
 class MlKitScreenTextRecognizer(
     private val bitmapPreprocessor: OcrBitmapPreprocessor = OcrBitmapPreprocessor(),
@@ -12,9 +13,15 @@ class MlKitScreenTextRecognizer(
 ) {
     fun recognizeText(
         bitmap: Bitmap,
+        traceId: String? = null,
         onResult: (OcrTextResult) -> Unit
     ) {
         val processedBitmap = bitmapPreprocessor.preprocess(bitmap)
+        DriverAssistantDebugLogger.log(
+            "ocr preprocessing info",
+            "traceId=${traceId ?: "none"}, original=${bitmap.width}x${bitmap.height}, " +
+                "processed=${processedBitmap.width}x${processedBitmap.height}, reused=${processedBitmap === bitmap}"
+        )
         val image = InputImage.fromBitmap(processedBitmap, 0)
 
         recognizer.process(image)
