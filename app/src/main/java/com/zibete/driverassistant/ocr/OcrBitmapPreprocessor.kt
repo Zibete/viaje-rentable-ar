@@ -66,8 +66,8 @@ class OcrBitmapPreprocessor(
     }
 
     private companion object {
-        private const val DEFAULT_CROP_TOP_RATIO = 0.50f
-        private const val DEFAULT_SCALE_FACTOR = 2.0f
+        private const val DEFAULT_CROP_TOP_RATIO = 0.45f
+        private const val DEFAULT_SCALE_FACTOR = 1.5f
         private const val DEFAULT_CONTRAST = 1.35f
         private const val DEFAULT_BRIGHTNESS = 8.0f
     }
