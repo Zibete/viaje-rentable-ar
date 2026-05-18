@@ -41,9 +41,9 @@ class TripOfferTextParser(
             parseTimes(sanitizedText)
         }
         val fare = if (hasStructuredTripFields) {
-            parseStructuredFare(sanitizedText)
+            parseStructuredFare(sanitizedText, traceId)
         } else {
-            parseFare(sanitizedText)
+            parseFare(sanitizedText, traceId)
         }
         val pickupKm = if (hasStructuredTripFields) {
             structuredTripFields.pickupKm
@@ -107,17 +107,16 @@ class TripOfferTextParser(
 
     private fun String?.orNone(): String = this ?: "none"
 
-    private fun parseFare(rawText: String): Double? {
-        val baseFare = parseBaseFare(rawText)
+    private fun parseFare(rawText: String, traceId: String?): Double? {
+        val baseFare = parseBaseFare(rawText, traceId)
         return baseFare?.plus(parseAdditionalFares(rawText))
     }
 
-    private fun parseBaseFare(rawText: String): Double? {
-        return parseExplicitBaseFare(rawText)
-            ?: parseStandaloneLargeBaseFare(rawText)
+    private fun parseBaseFare(rawText: String, traceId: String?): Double? {
+        return selectBaseFareCandidate(rawText.baseFareLines(), traceId)?.amount
     }
 
-    private fun parseStructuredFare(rawText: String): Double? {
+    private fun parseStructuredFare(rawText: String, traceId: String?): Double? {
         val lines = rawText.lineSequence()
             .map { it.trim() }
             .filter { it.isNotBlank() }
@@ -128,20 +127,11 @@ class TripOfferTextParser(
                 structuredTripRegexes.any { regex -> regex.containsMatchIn(line) }
         }
         if (firstStructuredLineIndex <= 0) {
-            return parseFare(rawText)
+            return parseFare(rawText, traceId)
         }
 
         val linesBeforeStructuredFields = lines.take(firstStructuredLineIndex).asReversed()
-        val baseFare = linesBeforeStructuredFields
-            .filterNot { line -> line.hasAdditionalFareContext() }
-            .firstNotNullOfOrNull { line -> parseExplicitFare(line) }
-            ?: linesBeforeStructuredFields
-                .filterNot { line -> line.hasAdditionalFareContext() }
-                .filterNot { line -> line.containsMetricOrNoise() }
-                .firstNotNullOfOrNull { line ->
-                    standaloneLargeFareRegex.find(line)?.groupValues?.get(1)?.toMoneyOrNull()
-                        ?.takeIf { amount -> amount >= MIN_STANDALONE_FARE }
-                }
+        val baseFare = selectBaseFareCandidate(linesBeforeStructuredFields, traceId)?.amount
 
         val additionalFares = linesBeforeStructuredFields
             .asReversed()
@@ -151,29 +141,35 @@ class TripOfferTextParser(
         return baseFare?.plus(additionalFares)
     }
 
-    private fun parseExplicitBaseFare(rawText: String): Double? {
-        return rawText.lineSequence()
-            .map { it.trim() }
-            .filter { line -> line.isNotBlank() }
-            .filterNot { line -> line.hasAdditionalFareContext() }
-            .firstNotNullOfOrNull { line -> parseExplicitFare(line) }
-    }
+    private fun selectBaseFareCandidate(lines: List<String>, traceId: String?): FareCandidate? {
+        val evaluatedCandidates = lines
+            .flatMapIndexed { index, line -> findFareCandidates(line, index) }
+            .map { candidate -> candidate.withDiscardReason() }
+            .toList()
+        val acceptedCandidates = evaluatedCandidates.filter { candidate -> candidate.discardReason == null }
+        val selectedCandidate = acceptedCandidates
+            .maxWithOrNull(compareBy<FareCandidate> { it.confidence }.thenBy { -it.lineIndex })
 
-    private fun parseExplicitFare(rawText: String): Double? {
-        return trailingArsFareRegex.find(rawText)?.groupValues?.get(1)?.toMoneyOrNull()
-            ?: currencyFareRegex.find(rawText)?.groupValues?.get(1)?.toMoneyOrNull()
-            ?: pesosFareRegex.find(rawText)?.groupValues?.get(1)?.toMoneyOrNull()
-    }
+        DriverAssistantDebugLogger.log(
+            "parser fare candidates",
+            "traceId=${traceId.orNone()}, candidates=" +
+                evaluatedCandidates.joinToString(separator = " | ") { candidate ->
+                    "amount=${candidate.amount}, raw='${candidate.rawAmount}', reason=${candidate.reason}, " +
+                        "line=${candidate.lineIndex}, discarded=${candidate.discardReason ?: "false"}"
+                }.ifBlank { "none" }
+        )
+        DriverAssistantDebugLogger.log(
+            "parser fare selected",
+            if (selectedCandidate == null) {
+                "traceId=${traceId.orNone()}, selected=none, reason=no accepted base fare candidate"
+            } else {
+                "traceId=${traceId.orNone()}, selected=${selectedCandidate.amount}, " +
+                    "raw='${selectedCandidate.rawAmount}', reason=${selectedCandidate.reason}, " +
+                    "line=${selectedCandidate.lineIndex}"
+            }
+        )
 
-    private fun parseStandaloneLargeBaseFare(rawText: String): Double? {
-        return rawText.lineSequence()
-            .map { it.trim() }
-            .filter { line -> line.isNotBlank() }
-            .filterNot { line -> line.hasAdditionalFareContext() }
-            .filterNot { line -> line.containsMetricOrNoise() }
-            .flatMap { line -> standaloneLargeFareRegex.findAll(line) }
-            .mapNotNull { match -> match.groupValues[1].toMoneyOrNull() }
-            .firstOrNull { amount -> amount >= MIN_STANDALONE_FARE }
+        return selectedCandidate
     }
 
     private fun parseAdditionalFares(rawText: String): Double {
@@ -183,6 +179,58 @@ class TripOfferTextParser(
             .flatMap { line -> additionalFareRegex.findAll(line) }
             .mapNotNull { match -> match.groupValues[1].toMoneyOrNull() }
             .sum()
+    }
+
+    private fun String.baseFareLines(): List<String> {
+        return lineSequence()
+            .map { line -> line.trim() }
+            .filter { line -> line.isNotBlank() }
+            .filterNot { line -> line.hasAdditionalFareContext() }
+            .toList()
+    }
+
+    private fun findFareCandidates(line: String, lineIndex: Int): List<FareCandidate> {
+        return buildList {
+            trailingCurrencyFareRegex.findAll(line).forEach { match ->
+                add(match.toFareCandidate(line, lineIndex, reason = "explicit trailing currency", confidence = 100))
+            }
+            leadingCurrencyFareRegex.findAll(line).forEach { match ->
+                add(match.toFareCandidate(line, lineIndex, reason = "explicit leading currency", confidence = 100))
+            }
+            standaloneLargeFareRegex.findAll(line).forEach { match ->
+                add(match.toFareCandidate(line, lineIndex, reason = "standalone large amount", confidence = 60))
+            }
+        }.distinctBy { candidate -> candidate.lineIndex to candidate.range }
+    }
+
+    private fun MatchResult.toFareCandidate(
+        line: String,
+        lineIndex: Int,
+        reason: String,
+        confidence: Int
+    ): FareCandidate {
+        val amountText = groupValues[1]
+        return FareCandidate(
+            amount = amountText.toMoneyOrNull(),
+            rawAmount = amountText,
+            sourceLine = line,
+            range = groups[1]?.range ?: range,
+            reason = reason,
+            confidence = confidence,
+            lineIndex = lineIndex
+        )
+    }
+
+    private fun FareCandidate.withDiscardReason(): FareCandidate {
+        val discardReason = when {
+            amount == null -> "invalid amount"
+            amount < MIN_STANDALONE_FARE -> "below minimum base fare"
+            sourceLine.hasAdditionalFareContext() -> "additional fare context"
+            sourceLine.hasMetricUnitAfter(range.last) -> "metric unit after amount"
+            sourceLine.hasPartialThousandsPrefixBefore(range.first) -> "partial thousands match"
+            else -> null
+        }
+        return copy(discardReason = discardReason)
     }
 
     private fun parseStructuredTripFields(rawText: String): StructuredTripFields {
@@ -255,6 +303,16 @@ class TripOfferTextParser(
         return integerLike.toDoubleOrNull()
     }
 
+    private fun String.hasMetricUnitAfter(amountEndIndex: Int): Boolean {
+        val suffix = drop(amountEndIndex + 1).take(12)
+        return metricUnitAfterAmountRegex.containsMatchIn(suffix)
+    }
+
+    private fun String.hasPartialThousandsPrefixBefore(amountStartIndex: Int): Boolean {
+        val prefix = take(amountStartIndex).takeLast(8)
+        return partialThousandsPrefixRegex.containsMatchIn(prefix)
+    }
+
     private fun String.toDecimalOrNull(): Double? {
         return replace(",", ".").toDoubleOrNull()
     }
@@ -307,26 +365,38 @@ class TripOfferTextParser(
         val km: Double
     )
 
+    private data class FareCandidate(
+        val amount: Double?,
+        val rawAmount: String,
+        val sourceLine: String,
+        val range: IntRange,
+        val reason: String,
+        val confidence: Int,
+        val lineIndex: Int,
+        val discardReason: String? = null
+    )
+
     private companion object {
         private const val MIN_STANDALONE_FARE = 1_000.0
+        private const val MONEY_AMOUNT_PATTERN =
+            """\d{1,3}(?:\s*[.,\s]\s*\d{3})+|\d{4,6}|\d{1,3}(?:[.,]\d{1,2})?"""
         private const val TIME_DISTANCE_PATTERN =
             """([0-9lI|]+(?:[.,][0-9lI|]+)?)\s*(?:m\s*(?:in|n|inutos)?|rnin)\s*(?:\(\s*)?([0-9lI|]+(?:[.,][0-9lI|]+)?)\s*k\s*(?:m|rn|in)(?:\s*\))?"""
 
-        val trailingArsFareRegex = Regex(
-            pattern = """(?i)\b(\d{1,3}(?:[.,]\d{3})+|\d+(?:[.,]\d{1,2})?)\s*ARS\b"""
+        val trailingCurrencyFareRegex = Regex(
+            pattern = """(?i)(?<![\d.,])($MONEY_AMOUNT_PATTERN)\s*(?:ARS|pesos)\b"""
         )
-        val currencyFareRegex = Regex(
-            pattern = """(?i)(?:ARS\s*|\$\s*)(\d{1,3}(?:[.,]\d{3})+|\d+(?:[.,]\d{1,2})?)"""
-        )
-        val pesosFareRegex = Regex(
-            pattern = """(?i)\b(\d{1,3}(?:[.,]\d{3})+|\d+)\s*pesos\b"""
+        val leadingCurrencyFareRegex = Regex(
+            pattern = """(?i)(?:\bARS\b|\$)\s*($MONEY_AMOUNT_PATTERN)"""
         )
         val additionalFareRegex = Regex(
-            pattern = """(?i)(?:\+\s*)?(\d{1,3}(?:[.,]\d{3})+|\d+(?:[.,]\d{1,2})?)\s*ARS\b"""
+            pattern = """(?i)(?:\+\s*)?($MONEY_AMOUNT_PATTERN)\s*ARS\b"""
         )
         val standaloneLargeFareRegex = Regex(
-            pattern = """\b(\d{4,6}|\d{1,3}(?:[.,]\d{3})+)\b"""
+            pattern = """(?<![\d.,])($MONEY_AMOUNT_PATTERN)(?![\d.,])"""
         )
+        val metricUnitAfterAmountRegex = Regex(pattern = """^\s*/?\s*(?:km|h|min)\b""", option = RegexOption.IGNORE_CASE)
+        val partialThousandsPrefixRegex = Regex(pattern = """\d{1,3}\s*[.,]\s*$""")
         val metricOrNoiseRegex = Regex(
             pattern = """(?i)(?:\b(?:min|km|ars|pesos|dni|viaje|distancia)\b|\$/|/\s*(?:h|km)|%|\d+\s*:\s*\d+|\d+[.,]\d+\s*\()"""
         )
