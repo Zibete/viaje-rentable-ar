@@ -24,6 +24,8 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.core.app.NotificationCompat
 import com.zibete.driverassistant.calculator.DriverDecision
+import com.zibete.driverassistant.overlay.OverlayVisualState.DECISION
+import com.zibete.driverassistant.overlay.OverlayVisualState.INCOMPLETE_DATA
 
 class DriverDecisionOverlayService : Service() {
     private var currentState: OverlayCardState? = null
@@ -102,10 +104,10 @@ class DriverDecisionOverlayService : Service() {
     }
 
     private fun buildOverlayView(state: OverlayCardState): View {
-        val accentColor = state.decision.toAccentColor()
+        val accentColor = state.toAccentColor()
         val background = GradientDrawable().apply {
             cornerRadius = 22f
-            setColor(Color.argb(242, 18, 22, 26))
+            setColor(state.toBackgroundColor())
             setStroke(3, accentColor)
         }
 
@@ -118,7 +120,7 @@ class DriverDecisionOverlayService : Service() {
 
             addView(
                 overlayText(
-                    text = state.decision.toSpanishLabel(),
+                    text = state.titleText,
                     sizeSp = 18f,
                     color = accentColor,
                     style = Typeface.BOLD
@@ -247,7 +249,7 @@ class DriverDecisionOverlayService : Service() {
         return NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentTitle("Overlay de decision activo")
-            .setContentText("${state.decision.toSpanishLabel()} - ${state.fareText}")
+            .setContentText("${state.titleText} - ${state.fareText}")
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
@@ -309,6 +311,11 @@ class DriverDecisionOverlayService : Service() {
 
         return OverlayCardState(
             decision = decision,
+            visualState = getStringExtra(EXTRA_VISUAL_STATE)
+                ?.let { runCatching { OverlayVisualState.valueOf(it) }.getOrNull() }
+                ?: DECISION,
+            titleText = getStringExtra(EXTRA_TITLE_TEXT)
+                .orDefault(decision.toSpanishLabel()),
             fareText = getStringExtra(EXTRA_FARE_TEXT).orDefault("$ -"),
             arsPerHourText = getStringExtra(EXTRA_ARS_PER_HOUR_TEXT).orDefault("$ -"),
             arsPerKmText = getStringExtra(EXTRA_ARS_PER_KM_TEXT).orDefault("$ -"),
@@ -330,17 +337,29 @@ class DriverDecisionOverlayService : Service() {
         }
     }
 
-    private fun DriverDecision.toAccentColor(): Int {
-        return when (this) {
-            DriverDecision.ACCEPT -> Color.rgb(40, 190, 120)
-            DriverDecision.REJECT -> Color.rgb(235, 83, 83)
-            DriverDecision.REVIEW -> Color.rgb(245, 178, 58)
+    private fun OverlayCardState.toAccentColor(): Int {
+        return when (visualState) {
+            INCOMPLETE_DATA -> Color.rgb(248, 250, 252)
+            DECISION -> when (decision) {
+                DriverDecision.ACCEPT -> Color.rgb(40, 190, 120)
+                DriverDecision.REJECT -> Color.rgb(235, 83, 83)
+                DriverDecision.REVIEW -> Color.rgb(245, 178, 58)
+            }
+        }
+    }
+
+    private fun OverlayCardState.toBackgroundColor(): Int {
+        return when (visualState) {
+            INCOMPLETE_DATA -> Color.argb(242, 48, 52, 57)
+            DECISION -> Color.argb(242, 18, 22, 26)
         }
     }
 
     companion object {
         const val ACTION_STOP = "com.zibete.driverassistant.overlay.STOP"
         const val EXTRA_DECISION = "extra_decision"
+        const val EXTRA_VISUAL_STATE = "extra_visual_state"
+        const val EXTRA_TITLE_TEXT = "extra_title_text"
         const val EXTRA_FARE_TEXT = "extra_fare_text"
         const val EXTRA_ARS_PER_HOUR_TEXT = "extra_ars_per_hour_text"
         const val EXTRA_ARS_PER_KM_TEXT = "extra_ars_per_km_text"

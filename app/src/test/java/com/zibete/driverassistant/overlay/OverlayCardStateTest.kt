@@ -30,10 +30,12 @@ class OverlayCardStateTest {
         assertEquals("$ -", state.arsPerHourText)
         assertEquals("- min", state.totalTimeText)
         assertEquals("- km", state.totalKmText)
+        assertEquals(OverlayVisualState.INCOMPLETE_DATA, state.visualState)
+        assertEquals("DATOS INCOMPLETOS", state.titleText)
     }
 
     @Test
-    fun fromDecisionResultShowsIncompleteDataReasonWhenNoReasonExists() {
+    fun fromDecisionResultUsesIncompleteVisualStateWhenFareIsMissing() {
         val state = OverlayCardState.fromDecisionResult(
             decisionResult(
                 fareAmount = null,
@@ -44,7 +46,60 @@ class OverlayCardStateTest {
             )
         )
 
-        assertEquals("Datos incompletos", state.shortReason)
+        assertEquals(DriverDecision.REJECT, state.decision)
+        assertEquals(OverlayVisualState.INCOMPLETE_DATA, state.visualState)
+        assertEquals("DATOS INCOMPLETOS", state.titleText)
+        assertEquals("Falta tarifa", state.shortReason)
+    }
+
+    @Test
+    fun fromDecisionResultUsesDistanceMissingReasonBeforeGenericIncompleteReason() {
+        val state = OverlayCardState.fromDecisionResult(
+            decisionResult(
+                fareAmount = 7124.0,
+                totalKm = null,
+                totalMinutes = 30.0,
+                arsPerKm = null,
+                arsPerHour = 14248.0
+            )
+        )
+
+        assertEquals(OverlayVisualState.INCOMPLETE_DATA, state.visualState)
+        assertEquals("Falta distancia", state.shortReason)
+    }
+
+    @Test
+    fun fromDecisionResultUsesTimeMissingReasonWhenOnlyTimeDataIsMissing() {
+        val state = OverlayCardState.fromDecisionResult(
+            decisionResult(
+                fareAmount = 7124.0,
+                totalKm = 14.7,
+                totalMinutes = null,
+                arsPerKm = 484.6,
+                arsPerHour = null
+            )
+        )
+
+        assertEquals(OverlayVisualState.INCOMPLETE_DATA, state.visualState)
+        assertEquals("Falta tiempo", state.shortReason)
+    }
+
+    @Test
+    fun fromDecisionResultKeepsDecisionVisualStateForCompleteData() {
+        val state = OverlayCardState.fromDecisionResult(
+            decisionResult(
+                fareAmount = 7124.0,
+                totalKm = 14.7,
+                totalMinutes = 30.0,
+                arsPerKm = 484.6,
+                arsPerHour = 14248.0
+            )
+        )
+
+        assertEquals(OverlayVisualState.DECISION, state.visualState)
+        assertEquals("RECHAZAR", state.titleText)
+        assertEquals(DriverDecision.REJECT, state.decision)
+        assertEquals(null, state.shortReason)
     }
 
     @Test
