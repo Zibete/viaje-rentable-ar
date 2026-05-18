@@ -359,6 +359,8 @@ class ScreenCaptureMonitorService : Service() {
         val overlayState = OverlayCardState.fromDecisionResult(result)
         val intent = Intent(this, DriverDecisionOverlayService::class.java).apply {
             putExtra(DriverDecisionOverlayService.EXTRA_DECISION, overlayState.decision.name)
+            putExtra(DriverDecisionOverlayService.EXTRA_VISUAL_STATE, overlayState.visualState.name)
+            putExtra(DriverDecisionOverlayService.EXTRA_TITLE_TEXT, overlayState.titleText)
             putExtra(DriverDecisionOverlayService.EXTRA_FARE_TEXT, overlayState.fareText)
             putExtra(DriverDecisionOverlayService.EXTRA_ARS_PER_HOUR_TEXT, overlayState.arsPerHourText)
             putExtra(DriverDecisionOverlayService.EXTRA_ARS_PER_KM_TEXT, overlayState.arsPerKmText)
