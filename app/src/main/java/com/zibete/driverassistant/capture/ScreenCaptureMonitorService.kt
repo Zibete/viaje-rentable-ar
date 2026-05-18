@@ -49,6 +49,7 @@ class ScreenCaptureMonitorService : Service() {
     private val detectionState = TripOfferDetectionState()
     private val frameGate = OcrFrameGate()
     private val traceIdGenerator = OcrTraceIdGenerator()
+    private val candidateBuffer = OcrCandidateBuffer()
     private val isProcessingFrame = AtomicBoolean(false)
 
     @Volatile
@@ -63,6 +64,7 @@ class ScreenCaptureMonitorService : Service() {
     private var nextFrameAtMillis: Long = 0L
     private var noOfferCycles: Int = 0
     private var overlayVisible: Boolean = false
+    private var candidateBufferFlushRunnable: Runnable? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -113,6 +115,8 @@ class ScreenCaptureMonitorService : Service() {
     }
 
     override fun onDestroy() {
+        cancelCandidateBufferFlush()
+        candidateBuffer.clear()
         releaseCaptureResources()
         textRecognizer.close()
         serviceScope.cancel()
@@ -301,44 +305,137 @@ class ScreenCaptureMonitorService : Service() {
             }
             is TripOfferAnalysisResult.DecisionReady -> {
                 noOfferCycles = 0
-                val result = analysis.result
-                val hasCompleteData = result.hasCompleteMonitorOverlayData()
-                val missingOverlayFields = result.missingOverlayFields()
-                val shouldShowOverlay = !hasCompleteData ||
-                    detectionState.shouldShowOverlay(analysis.input)
-                val overlayReason = when {
-                    !hasCompleteData -> "incomplete data"
-                    shouldShowOverlay -> "new decision"
-                    else -> "duplicate complete offer"
-                }
-                val overlayUpdated = if (shouldShowOverlay) {
-                    startDecisionOverlay(result, traceId, overlayReason)
-                } else {
-                    false
-                }
-                if (overlayUpdated && hasCompleteData) {
-                    detectionState.markOverlayShown(analysis.input)
-                }
-                DriverAssistantDebugLogger.log(
-                    "monitor decision summary",
-                    "traceId=$traceId, hasCompleteData=$hasCompleteData, " +
-                        "missingOverlayFields=$missingOverlayFields, shouldShowOverlay=$shouldShowOverlay, " +
-                        "overlayUpdated=$overlayUpdated, overlayReason=$overlayReason, decision=${result.decision}, " +
-                        "fare=${result.fareAmount}, arsPerKm=${result.arsPerKm}, arsPerHour=${result.arsPerHour}, " +
-                        "totalKm=${result.totalKm}, totalMinutes=${result.totalMinutes}"
-                )
-                publishStatus(
-                    status = if (hasCompleteData) {
-                        ScreenCaptureMonitorStatus.OFFER_DETECTED
-                    } else {
-                        ScreenCaptureMonitorStatus.INCOMPLETE_DATA
-                    },
-                    recognizedText = rawText,
-                    ocrStatus = OcrStatus.TEXT_DETECTED,
-                    decisionResult = result,
-                    overlayUpdated = overlayUpdated
-                )
+                handleDecisionCandidate(analysis, traceId)
             }
+        }
+    }
+
+    private fun handleDecisionCandidate(
+        analysis: TripOfferAnalysisResult.DecisionReady,
+        traceId: String
+    ) {
+        val now = System.currentTimeMillis()
+        val snapshot = OcrCandidateSnapshot(
+            traceId = traceId,
+            createdAtMillis = now,
+            input = analysis.input,
+            result = analysis.result
+        )
+        val update = candidateBuffer.add(snapshot, now)
+        logExpiredCandidates(update.expiredTraceIds)
+        DriverAssistantDebugLogger.log(
+            "monitor candidate buffered",
+            "traceId=$traceId, completeFieldCount=${snapshot.completeFieldCount}, " +
+                "hasCompleteOverlayData=${snapshot.hasCompleteOverlayData}, " +
+                "missingOverlayFields=${snapshot.result.missingOverlayFields()}"
+        )
+        update.replacedTraceId?.let { replacedTraceId ->
+            DriverAssistantDebugLogger.log(
+                "monitor candidate replaced",
+                "traceId=$traceId, replacedTraceId=$replacedTraceId, completeFieldCount=${snapshot.completeFieldCount}"
+            )
+        }
+
+        if (update.selected != null) {
+            DriverAssistantDebugLogger.log(
+                "monitor candidate complete immediate",
+                "traceId=${update.selected.traceId}, completeFieldCount=${update.selected.completeFieldCount}"
+            )
+            candidateBuffer.clear()
+            cancelCandidateBufferFlush()
+            processSelectedCandidate(update.selected, update.selectedReason ?: "complete immediate")
+            return
+        }
+
+        scheduleCandidateBufferFlush(now)
+    }
+
+    private fun flushBufferedCandidate() {
+        val now = System.currentTimeMillis()
+        val selection = candidateBuffer.selectReady(now)
+        logExpiredCandidates(selection.expiredTraceIds)
+
+        val selected = selection.selected
+        if (selected == null) {
+            scheduleCandidateBufferFlush(now)
+            return
+        }
+
+        processSelectedCandidate(selected, selection.selectedReason ?: "buffer selected")
+    }
+
+    private fun processSelectedCandidate(
+        snapshot: OcrCandidateSnapshot,
+        selectionReason: String
+    ) {
+        val result = snapshot.result
+        val hasCompleteData = snapshot.hasCompleteOverlayData
+        val missingOverlayFields = result.missingOverlayFields()
+        val shouldShowOverlay = !hasCompleteData ||
+            detectionState.shouldShowOverlay(snapshot.input)
+        val overlayReason = when {
+            !hasCompleteData -> "incomplete data"
+            shouldShowOverlay -> "new decision"
+            else -> "duplicate complete offer"
+        }
+        val overlayUpdated = if (shouldShowOverlay) {
+            startDecisionOverlay(result, snapshot.traceId, overlayReason)
+        } else {
+            DriverAssistantDebugLogger.log(
+                "monitor overlay shown",
+                "traceId=${snapshot.traceId}, shown=false, reason=$overlayReason"
+            )
+            false
+        }
+        if (overlayUpdated && hasCompleteData) {
+            detectionState.markOverlayShown(snapshot.input)
+        }
+        DriverAssistantDebugLogger.log(
+            "monitor candidate selected",
+            "traceId=${snapshot.traceId}, reason=$selectionReason, completeFieldCount=${snapshot.completeFieldCount}"
+        )
+        DriverAssistantDebugLogger.log(
+            "monitor decision summary",
+            "traceId=${snapshot.traceId}, hasCompleteData=$hasCompleteData, " +
+                "missingOverlayFields=$missingOverlayFields, shouldShowOverlay=$shouldShowOverlay, " +
+                "overlayUpdated=$overlayUpdated, overlayReason=$overlayReason, decision=${result.decision}, " +
+                "fare=${result.fareAmount}, arsPerKm=${result.arsPerKm}, arsPerHour=${result.arsPerHour}, " +
+                "totalKm=${result.totalKm}, totalMinutes=${result.totalMinutes}"
+        )
+        publishStatus(
+            status = if (hasCompleteData) {
+                ScreenCaptureMonitorStatus.OFFER_DETECTED
+            } else {
+                ScreenCaptureMonitorStatus.INCOMPLETE_DATA
+            },
+            recognizedText = snapshot.input.rawText,
+            ocrStatus = OcrStatus.TEXT_DETECTED,
+            decisionResult = result,
+            overlayUpdated = overlayUpdated
+        )
+    }
+
+    private fun scheduleCandidateBufferFlush(nowMillis: Long) {
+        val delayMillis = candidateBuffer.nextSelectionDelayMillis(nowMillis) ?: return
+        cancelCandidateBufferFlush()
+        candidateBufferFlushRunnable = Runnable { flushBufferedCandidate() }.also { runnable ->
+            captureHandler?.postDelayed(runnable, delayMillis)
+        }
+    }
+
+    private fun cancelCandidateBufferFlush() {
+        candidateBufferFlushRunnable?.let { runnable ->
+            captureHandler?.removeCallbacks(runnable)
+        }
+        candidateBufferFlushRunnable = null
+    }
+
+    private fun logExpiredCandidates(traceIds: List<String>) {
+        traceIds.forEach { expiredTraceId ->
+            DriverAssistantDebugLogger.log(
+                "monitor candidate expired",
+                "traceId=$expiredTraceId"
+            )
         }
     }
 
@@ -346,6 +443,8 @@ class ScreenCaptureMonitorService : Service() {
         noOfferCycles += 1
         val status = if (noOfferCycles >= NO_OFFER_STATUS_THRESHOLD) {
             detectionState.reset()
+            candidateBuffer.clear()
+            cancelCandidateBufferFlush()
             hideDecisionOverlay("no active offer")
             ScreenCaptureMonitorStatus.NO_OFFER_DETECTED
         } else {
@@ -405,20 +504,6 @@ class ScreenCaptureMonitorService : Service() {
                 "title=${overlayState.titleText}"
         )
         return true
-    }
-
-    private fun TripDecisionResult.missingOverlayFields(): List<String> {
-        return buildList {
-            if (fareAmount == null) add("fare")
-            if (totalKm == null) add("totalKm")
-            if (totalMinutes == null) add("totalMinutes")
-            if (arsPerKm == null) add("arsPerKm")
-            if (arsPerHour == null) add("arsPerHour")
-        }
-    }
-
-    private fun TripDecisionResult.hasCompleteMonitorOverlayData(): Boolean {
-        return missingOverlayFields().isEmpty()
     }
 
     private fun hideDecisionOverlay(reason: String) {
