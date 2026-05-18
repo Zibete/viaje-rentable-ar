@@ -234,10 +234,6 @@ class ScreenCaptureMonitorService : Service() {
 
         nextFrameAtMillis = now + gateDecision.nextFrameDelayMillis
 
-        if (gateDecision.reason == "waiting stable candidate") {
-            hideDecisionOverlay("new visual candidate")
-        }
-
         if (!gateDecision.shouldRunOcr) {
             DriverAssistantDebugLogger.log(
                 "monitor OCR skipped",
