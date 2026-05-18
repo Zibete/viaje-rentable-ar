@@ -505,6 +505,87 @@ class TripOfferTextParserTest {
     }
 
     @Test
+    fun parsesFareThousandsSeparatorVariants() {
+        listOf(
+            "5.677 ARS",
+            "${'$'} 5.677",
+            "5 677 ARS",
+            "5. 677 ARS",
+            "5 .677 ARS",
+            "${'$'}5 677 ARS",
+            "ARS 5.677"
+        ).forEach { fareLine ->
+            val result = parser.parse(
+                """
+                UberX
+                $fareLine
+                A 3 min (1.3 km) de distancia
+                Viaje de 26 min (11.9 km)
+                """.trimIndent(),
+                traceId = "test-fare-thousands"
+            )
+
+            assertNotNull(fareLine, result)
+            assertEquals(fareLine, 5677.0, result?.fareAmount ?: 0.0, 0.001)
+        }
+    }
+
+    @Test
+    fun doesNotUseArsPerKmAsFare() {
+        val result = parser.parse(
+            """
+            ${'$'} 531/km
+            3 min
+            1.3 km
+            """.trimIndent()
+        )
+
+        assertTrue(result == null || result.fareAmount == null)
+    }
+
+    @Test
+    fun doesNotUseArsPerHourAsFare() {
+        val result = parser.parse(
+            """
+            ${'$'} 7503/h
+            26 min
+            11.9 km
+            """.trimIndent()
+        )
+
+        assertTrue(result == null || result.fareAmount == null)
+    }
+
+    @Test
+    fun doesNotSumAdditionalFareWithoutBaseFare() {
+        val result = parser.parse(
+            """
+            +914,00 ARS adicionales por
+            A 3 min (1.3 km) de distancia
+            Viaje de 26 min (11.9 km)
+            """.trimIndent()
+        )
+
+        assertNotNull(result)
+        assertEquals(null, result?.fareAmount)
+    }
+
+    @Test
+    fun keepsValidAdditionalFareWhenBaseFareExists() {
+        val result = parser.parse(
+            """
+            7.915 ARS
+            +914,00 ARS adicionales por
+            A 3 min (1.3 km) de distancia
+            Viaje de 26 min (11.9 km)
+            """.trimIndent()
+        )
+
+        assertNotNull(result)
+        assertEquals(8829.0, result?.fareAmount ?: 0.0, 0.001)
+    }
+
+    @Test
     fun ignoresOldOverlayWhenParsingCurrentUberOffer() {
         val result = parser.parse(
             """
