@@ -48,7 +48,7 @@ class TripOfferDecisionPipelineTest {
     }
 
     @Test
-    fun returnsNoTripDetectedWhenActionMarkerIsMissing() {
+    fun calculatesDecisionFromStrongEvidenceWithoutActionMarker() {
         val result = pipeline.analyzeRecognizedText(
             rawText = """
                 UberX
@@ -59,11 +59,14 @@ class TripOfferDecisionPipelineTest {
             config = config
         )
 
-        assertEquals(TripOfferAnalysisResult.NoTripDetected, result)
+        val decision = result as TripOfferAnalysisResult.DecisionReady
+        assertEquals(7124.0, decision.result.fareAmount ?: 0.0, 0.001)
+        assertEquals(14.7, decision.result.totalKm ?: 0.0, 0.001)
+        assertEquals(30.0, decision.result.totalMinutes ?: 0.0, 0.001)
     }
 
     @Test
-    fun returnsNoTripDetectedForStructuredOfferWithoutActionMarker() {
+    fun calculatesStructuredOfferWithoutActionMarker() {
         val result = pipeline.analyzeRecognizedText(
             rawText = """
                 2 Comfort Exclusivo
@@ -74,7 +77,10 @@ class TripOfferDecisionPipelineTest {
             config = config
         )
 
-        assertEquals(TripOfferAnalysisResult.NoTripDetected, result)
+        val decision = result as TripOfferAnalysisResult.DecisionReady
+        assertEquals(8780.0, decision.result.fareAmount ?: 0.0, 0.001)
+        assertEquals(14.7, decision.result.totalKm ?: 0.0, 0.001)
+        assertEquals(32.0, decision.result.totalMinutes ?: 0.0, 0.001)
     }
 
     @Test

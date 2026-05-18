@@ -27,14 +27,24 @@ class TripOfferDecisionPipeline(
             return TripOfferAnalysisResult.NoText
         }
 
-        if (!presenceValidator.hasActiveOffer(rawText)) {
+        val presence = presenceValidator.evaluate(rawText)
+        DriverAssistantDebugLogger.log(
+            "pipeline presence score",
+            "traceId=${traceId.orNone()}, isLikelyOffer=${presence.isLikelyOffer}, " +
+                "score=${presence.score}, hasActionMarker=${presence.hasActionMarker}, reasons=${presence.reasons}"
+        )
+        if (!presence.isLikelyOffer) {
             DriverAssistantDebugLogger.log(
                 "pipeline presence result",
-                "traceId=${traceId.orNone()}, activeOffer=false, reason=no active offer action marker"
+                "traceId=${traceId.orNone()}, activeOffer=false, score=${presence.score}, reasons=${presence.reasons}"
             )
             return TripOfferAnalysisResult.NoTripDetected
         }
-        DriverAssistantDebugLogger.log("pipeline presence result", "traceId=${traceId.orNone()}, activeOffer=true")
+        DriverAssistantDebugLogger.log(
+            "pipeline presence result",
+            "traceId=${traceId.orNone()}, activeOffer=true, score=${presence.score}, " +
+                "hasActionMarker=${presence.hasActionMarker}, reasons=${presence.reasons}"
+        )
 
         val candidate = parser.parse(rawText, traceId)
             ?: run {
