@@ -1,5 +1,6 @@
 package com.zibete.driverassistant.capture
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -22,16 +23,41 @@ class OcrFrameGateTest {
         val decision = gate.evaluate(signature(11), nowMillis = 1_000L)
 
         assertFalse(decision.shouldRunOcr)
+        assertEquals("stable frame", decision.reason)
     }
 
     @Test
-    fun allowsChangedFrameImmediatelyWithDefaultGate() {
+    fun skipsLowVisualChange() {
         val gate = OcrFrameGate()
 
         gate.evaluate(signature(10), nowMillis = 0L)
-        val decision = gate.evaluate(signature(90), nowMillis = 11_000L)
+        val decision = gate.evaluate(localizedSignature(baseValue = 10, changedValue = 35), nowMillis = 4_000L)
+
+        assertFalse(decision.shouldRunOcr)
+        assertEquals("stable frame", decision.reason)
+    }
+
+    @Test
+    fun allowsMediumVisualChangeWithoutWaitingForSafetyScan() {
+        val gate = OcrFrameGate()
+
+        gate.evaluate(signature(10), nowMillis = 0L)
+        val decision = gate.evaluate(localizedSignature(baseValue = 10, changedValue = 50), nowMillis = 4_000L)
 
         assertTrue(decision.shouldRunOcr)
+        assertEquals("visual candidate", decision.reason)
+    }
+
+    @Test
+    fun allowsLikelyNewScreenshotDuringCooldown() {
+        val gate = OcrFrameGate()
+
+        gate.evaluate(signature(10), nowMillis = 0L)
+        val decision = gate.evaluate(localizedSignature(baseValue = 10, changedValue = 80), nowMillis = 1_000L)
+
+        assertTrue(decision.shouldRunOcr)
+        assertEquals("visual candidate", decision.reason)
+        assertTrue(decision.cooldownActive)
     }
 
     @Test
@@ -59,6 +85,7 @@ class OcrFrameGateTest {
         val decision = gate.evaluate(signature(45), nowMillis = 1_000L)
 
         assertFalse(decision.shouldRunOcr)
+        assertEquals("cooldown", decision.reason)
     }
 
     @Test
@@ -72,6 +99,18 @@ class OcrFrameGateTest {
     }
 
     private fun signature(value: Int): FrameSignature {
-        return FrameSignature(List(16) { value })
+        return FrameSignature(List(120) { value })
+    }
+
+    private fun localizedSignature(
+        baseValue: Int,
+        changedValue: Int,
+        changedCells: Int = 4
+    ): FrameSignature {
+        return FrameSignature(
+            List(120) { index ->
+                if (index < changedCells) changedValue else baseValue
+            }
+        )
     }
 }

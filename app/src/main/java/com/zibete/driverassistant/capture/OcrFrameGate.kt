@@ -9,9 +9,19 @@ data class FrameSignature(
         if (cells.isEmpty() || other.cells.isEmpty()) return Double.MAX_VALUE
         if (cells.size != other.cells.size) return Double.MAX_VALUE
 
-        return cells.indices
-            .sumOf { index -> abs(cells[index] - other.cells[index]) }
-            .toDouble() / cells.size
+        val differences = cells.indices.map { index -> abs(cells[index] - other.cells[index]) }
+        val averageDifference = differences.sum().toDouble() / differences.size
+        val focusedCellCount = (differences.size / 16).coerceAtLeast(1)
+        val focusedDifference = differences
+            .sortedDescending()
+            .take(focusedCellCount)
+            .average() * FOCUSED_CHANGE_WEIGHT
+
+        return maxOf(averageDifference, focusedDifference)
+    }
+
+    private companion object {
+        private const val FOCUSED_CHANGE_WEIGHT = 0.75
     }
 }
 
@@ -19,6 +29,9 @@ data class OcrFrameGateDecision(
     val shouldRunOcr: Boolean,
     val reason: String,
     val changeScore: Double? = null,
+    val threshold: Double? = null,
+    val cooldownActive: Boolean = false,
+    val millisSinceLastOcr: Long? = null,
     val nextFrameDelayMillis: Long
 )
 
@@ -42,13 +55,18 @@ class OcrFrameGate(
         signature: FrameSignature,
         nowMillis: Long
     ): OcrFrameGateDecision {
+        val millisSinceLastOcr = lastOcrAtMillis?.let { lastOcr -> nowMillis - lastOcr }
+        val cooldownActive = millisSinceLastOcr?.let { it < postOcrCooldownMillis } ?: false
         val previousSignature = lastFrameSignature
         if (previousSignature == null) {
             lastFrameSignature = signature
             return allowOcr(
                 nowMillis = nowMillis,
                 reason = "first frame",
-                changeScore = null
+                changeScore = null,
+                threshold = null,
+                cooldownActive = cooldownActive,
+                millisSinceLastOcr = millisSinceLastOcr
             )
         }
 
@@ -62,12 +80,18 @@ class OcrFrameGate(
                     allowOcr(
                         nowMillis = nowMillis,
                         reason = "stable visual candidate",
-                        changeScore = changeScore
+                        changeScore = changeScore,
+                        threshold = stabilityChangeThreshold,
+                        cooldownActive = cooldownActive,
+                        millisSinceLastOcr = millisSinceLastOcr
                     )
                 } else {
                     skipOcr(
                         reason = "waiting stable candidate",
                         changeScore = changeScore,
+                        threshold = stabilityChangeThreshold,
+                        cooldownActive = cooldownActive,
+                        millisSinceLastOcr = millisSinceLastOcr,
                         nextFrameDelayMillis = candidateFrameDelayMillis
                     )
                 }
@@ -80,22 +104,31 @@ class OcrFrameGate(
                 allowOcr(
                     nowMillis = nowMillis,
                     reason = "periodic safety scan",
-                    changeScore = changeScore
+                    changeScore = changeScore,
+                    threshold = visualChangeThreshold,
+                    cooldownActive = cooldownActive,
+                    millisSinceLastOcr = millisSinceLastOcr
                 )
             } else {
                 skipOcr(
                     reason = "stable frame",
                     changeScore = changeScore,
+                    threshold = visualChangeThreshold,
+                    cooldownActive = cooldownActive,
+                    millisSinceLastOcr = millisSinceLastOcr,
                     nextFrameDelayMillis = idleFrameDelayMillis
                 )
             }
         }
 
-        if (isInCooldown(nowMillis) && changeScore < strongVisualChangeThreshold) {
+        if (cooldownActive && changeScore < strongVisualChangeThreshold) {
             resetCandidate()
             return skipOcr(
                 reason = "cooldown",
                 changeScore = changeScore,
+                threshold = strongVisualChangeThreshold,
+                cooldownActive = cooldownActive,
+                millisSinceLastOcr = millisSinceLastOcr,
                 nextFrameDelayMillis = cooldownFrameDelayMillis
             )
         }
@@ -106,12 +139,18 @@ class OcrFrameGate(
             allowOcr(
                 nowMillis = nowMillis,
                 reason = "visual candidate",
-                changeScore = changeScore
+                changeScore = changeScore,
+                threshold = visualChangeThreshold,
+                cooldownActive = cooldownActive,
+                millisSinceLastOcr = millisSinceLastOcr
             )
         } else {
             skipOcr(
                 reason = "waiting stable candidate",
                 changeScore = changeScore,
+                threshold = visualChangeThreshold,
+                cooldownActive = cooldownActive,
+                millisSinceLastOcr = millisSinceLastOcr,
                 nextFrameDelayMillis = candidateFrameDelayMillis
             )
         }
@@ -126,7 +165,10 @@ class OcrFrameGate(
     private fun allowOcr(
         nowMillis: Long,
         reason: String,
-        changeScore: Double?
+        changeScore: Double?,
+        threshold: Double?,
+        cooldownActive: Boolean,
+        millisSinceLastOcr: Long?
     ): OcrFrameGateDecision {
         lastOcrAtMillis = nowMillis
         resetCandidate()
@@ -134,6 +176,9 @@ class OcrFrameGate(
             shouldRunOcr = true,
             reason = reason,
             changeScore = changeScore,
+            threshold = threshold,
+            cooldownActive = cooldownActive,
+            millisSinceLastOcr = millisSinceLastOcr,
             nextFrameDelayMillis = candidateFrameDelayMillis
         )
     }
@@ -141,12 +186,18 @@ class OcrFrameGate(
     private fun skipOcr(
         reason: String,
         changeScore: Double?,
+        threshold: Double?,
+        cooldownActive: Boolean,
+        millisSinceLastOcr: Long?,
         nextFrameDelayMillis: Long
     ): OcrFrameGateDecision {
         return OcrFrameGateDecision(
             shouldRunOcr = false,
             reason = reason,
             changeScore = changeScore,
+            threshold = threshold,
+            cooldownActive = cooldownActive,
+            millisSinceLastOcr = millisSinceLastOcr,
             nextFrameDelayMillis = nextFrameDelayMillis
         )
     }
@@ -156,22 +207,17 @@ class OcrFrameGate(
         return nowMillis - lastOcr >= safetyScanIntervalMillis
     }
 
-    private fun isInCooldown(nowMillis: Long): Boolean {
-        val lastOcr = lastOcrAtMillis ?: return false
-        return nowMillis - lastOcr < postOcrCooldownMillis
-    }
-
     private fun resetCandidate() {
         candidateSignature = null
         stableCandidateFrames = 0
     }
 
     private companion object {
-        private const val DEFAULT_VISUAL_CHANGE_THRESHOLD = 18.0
-        private const val DEFAULT_STRONG_VISUAL_CHANGE_THRESHOLD = 42.0
+        private const val DEFAULT_VISUAL_CHANGE_THRESHOLD = 12.0
+        private const val DEFAULT_STRONG_VISUAL_CHANGE_THRESHOLD = 24.0
         private const val DEFAULT_STABILITY_CHANGE_THRESHOLD = 8.0
         private const val DEFAULT_STABLE_FRAMES_REQUIRED = 1
-        private const val DEFAULT_POST_OCR_COOLDOWN_MILLIS = 10_000L
+        private const val DEFAULT_POST_OCR_COOLDOWN_MILLIS = 3_000L
         private const val DEFAULT_SAFETY_SCAN_INTERVAL_MILLIS = 30_000L
         private const val DEFAULT_IDLE_FRAME_DELAY_MILLIS = 1_200L
         private const val DEFAULT_CANDIDATE_FRAME_DELAY_MILLIS = 350L
