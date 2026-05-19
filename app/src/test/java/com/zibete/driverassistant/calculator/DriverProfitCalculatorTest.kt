@@ -251,6 +251,54 @@ class DriverProfitCalculatorTest {
     }
 
     @Test
+    fun marksReviewWhenLowArsPerKmIsRescuedByHighArsPerHourAndNetProfit() {
+        listOf(
+            ReviewRescueCase(fareAmount = 4229.0, totalKm = 7.9, totalMinutes = 18.0),
+            ReviewRescueCase(fareAmount = 4076.0, totalKm = 9.1, totalMinutes = 11.0),
+            ReviewRescueCase(fareAmount = 7124.0, totalKm = 14.7, totalMinutes = 30.0)
+        ).forEach { testCase ->
+            val result = calculator.calculate(
+                input = inputFromTotals(
+                    fareAmount = testCase.fareAmount,
+                    totalKm = testCase.totalKm,
+                    totalMinutes = testCase.totalMinutes
+                ),
+                config = config
+            )
+
+            assertEquals(testCase.toString(), DriverDecision.REVIEW, result.decision)
+            assertTrue(
+                testCase.toString(),
+                result.reviewReasons.contains("$/km bajo, pero $/h alto: revisar destino")
+            )
+            assertTrue(testCase.toString(), result.rejectionReasons.isEmpty())
+        }
+    }
+
+    @Test
+    fun rejectsTripsWithVeryLowArsPerKmEvenWhenArsPerHourIsHigh() {
+        listOf(
+            ReviewRescueCase(fareAmount = 16437.0, totalKm = 43.9, totalMinutes = 54.0),
+            ReviewRescueCase(fareAmount = 6205.0, totalKm = 17.9, totalMinutes = 30.0)
+        ).forEach { testCase ->
+            val result = calculator.calculate(
+                input = inputFromTotals(
+                    fareAmount = testCase.fareAmount,
+                    totalKm = testCase.totalKm,
+                    totalMinutes = testCase.totalMinutes
+                ),
+                config = config
+            )
+
+            assertEquals(testCase.toString(), DriverDecision.REJECT, result.decision)
+            assertTrue(
+                testCase.toString(),
+                result.rejectionReasons.contains("$/km muy bajo para el viaje")
+            )
+        }
+    }
+
+    @Test
     fun calculatesTotalKm() {
         val result = calculateReferenceTrip()
 
@@ -319,4 +367,25 @@ class DriverProfitCalculatorTest {
             platform = platform
         )
     }
+
+    private fun inputFromTotals(
+        fareAmount: Double,
+        totalKm: Double,
+        totalMinutes: Double
+    ): TripOfferInput {
+        return TripOfferInput(
+            fareAmount = fareAmount,
+            pickupKm = 0.0,
+            tripKm = totalKm,
+            pickupMinutes = 0.0,
+            tripMinutes = totalMinutes,
+            platform = "uber"
+        )
+    }
+
+    private data class ReviewRescueCase(
+        val fareAmount: Double,
+        val totalKm: Double,
+        val totalMinutes: Double
+    )
 }
