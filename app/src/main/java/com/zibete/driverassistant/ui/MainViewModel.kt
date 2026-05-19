@@ -111,6 +111,7 @@ class MainViewModel(
         _uiState.update {
             it.copy(
                 monitorStatus = ScreenCaptureMonitorStatus.WAITING_PERMISSION.toSpanishStatus(),
+                hasMonitoringSessionStarted = true,
                 monitorErrorMessage = null,
                 monitorOverlayStatus = null
             )
@@ -141,6 +142,7 @@ class MainViewModel(
         _uiState.update {
             it.copy(
                 monitorStatus = result.status.toSpanishStatus(),
+                hasMonitoringSessionStarted = true,
                 monitorLastRecognizedText = result.recognizedText
                     ?: it.monitorLastRecognizedText,
                 monitorErrorMessage = result.errorMessage,
@@ -172,7 +174,7 @@ class MainViewModel(
         viewModelScope.launch {
             configRepository.resetToDefaults()
             _uiState.update {
-                it.copy(configStatusMessage = "Configuracion restablecida")
+                it.copy(configStatusMessage = "Configuración restablecida")
             }
         }
     }
@@ -191,7 +193,7 @@ class MainViewModel(
                 viewModelScope.launch {
                     configRepository.updateConfig(result.config)
                     _uiState.update {
-                        it.copy(configStatusMessage = "Configuracion guardada")
+                        it.copy(configStatusMessage = "Configuración guardada")
                     }
                 }
             }
@@ -284,11 +286,11 @@ class MainViewModel(
 
     private fun OcrStatus.toSpanishStatus(): String {
         return when (this) {
-            OcrStatus.IDLE -> "OCR inactivo"
-            OcrStatus.PROCESSING -> "OCR procesando"
+            OcrStatus.IDLE -> "Análisis detenido"
+            OcrStatus.PROCESSING -> "Analizando pantalla"
             OcrStatus.TEXT_DETECTED -> "Texto detectado"
             OcrStatus.NO_TEXT -> "Sin texto detectado"
-            OcrStatus.ERROR -> "Error OCR"
+            OcrStatus.ERROR -> "Error de análisis"
         }
     }
 
