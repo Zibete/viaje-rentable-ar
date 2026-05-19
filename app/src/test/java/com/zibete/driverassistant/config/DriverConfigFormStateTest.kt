@@ -62,20 +62,14 @@ class DriverConfigFormStateTest {
     }
 
     @Test
-    fun preservesPlatformsAndAvoidZonesWhenSaving() {
+    fun preservesAvoidZonesWhenSaving() {
         val result = baseForm.toDriverConfig(baseConfig)
 
         val config = (result as DriverConfigFormValidationResult.Valid).config
-        assertEquals(baseConfig.enabledPlatforms, config.enabledPlatforms)
         assertEquals(baseConfig.avoidZones, config.avoidZones)
     }
 
     private val baseConfig = DriverConfig.default().copy(
-        enabledPlatforms = mapOf(
-            "uber" to true,
-            "didi" to false,
-            "cabify" to true
-        ),
         avoidZones = listOf(
             AvoidZoneRule(
                 id = "zona-1",
