@@ -191,13 +191,13 @@ class TripOfferDecisionPipelineTest {
         )
 
         val decision = result as TripOfferAnalysisResult.DecisionReady
-        assertEquals(DriverDecision.REJECT, decision.result.decision)
+        assertEquals(DriverDecision.REVIEW, decision.result.decision)
         assertEquals(7124.0, decision.result.fareAmount ?: 0.0, 0.001)
         assertEquals(14.7, decision.result.totalKm ?: 0.0, 0.001)
         assertEquals(30.0, decision.result.totalMinutes ?: 0.0, 0.001)
         assertEquals(484.626, decision.result.arsPerKm ?: 0.0, 0.001)
         assertEquals(14248.0, decision.result.arsPerHour ?: 0.0, 0.001)
-        assertTrue(decision.result.rejectionReasons.any { it.contains("$/km") })
+        assertTrue(decision.result.reviewReasons.any { it.contains("$/km bajo") })
     }
 
     @Test
@@ -223,13 +223,13 @@ class TripOfferDecisionPipelineTest {
         )
 
         val decision = result as TripOfferAnalysisResult.DecisionReady
-        assertEquals(DriverDecision.REJECT, decision.result.decision)
+        assertEquals(DriverDecision.REVIEW, decision.result.decision)
         assertEquals(7124.0, decision.result.fareAmount ?: 0.0, 0.001)
         assertEquals(14.7, decision.result.totalKm ?: 0.0, 0.001)
         assertEquals(30.0, decision.result.totalMinutes ?: 0.0, 0.001)
         assertEquals(484.626, decision.result.arsPerKm ?: 0.0, 0.001)
         assertEquals(14248.0, decision.result.arsPerHour ?: 0.0, 0.001)
-        assertTrue(decision.result.rejectionReasons.any { it.contains("$/km") })
+        assertTrue(decision.result.reviewReasons.any { it.contains("$/km bajo") })
     }
 
     @Test

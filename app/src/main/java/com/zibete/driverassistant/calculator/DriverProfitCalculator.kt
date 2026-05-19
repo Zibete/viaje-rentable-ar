@@ -51,12 +51,12 @@ class DriverProfitCalculator {
             estimatedCost?.let { cost -> fare - cost }
         }
 
-        evaluateMinimumMetric(
+        evaluateArsPerKm(
             value = arsPerKm,
-            minimum = config.minArsPerKm,
-            tolerancePercent = config.reviewTolerancePercent,
-            rejectionReason = "$/km por debajo del minimo",
-            reviewReason = "$/km dentro de tolerancia",
+            input = input,
+            arsPerHour = arsPerHour,
+            estimatedNetProfit = estimatedNetProfit,
+            config = config,
             rejectionReasons = rejectionReasons,
             reviewReasons = reviewReasons
         )
@@ -156,5 +156,60 @@ class DriverProfitCalculator {
             value < toleratedMinimum -> rejectionReasons += rejectionReason
             value < minimum -> reviewReasons += reviewReason
         }
+    }
+
+    private fun evaluateArsPerKm(
+        value: Double?,
+        input: TripOfferInput,
+        arsPerHour: Double?,
+        estimatedNetProfit: Double?,
+        config: DriverConfig,
+        rejectionReasons: MutableList<String>,
+        reviewReasons: MutableList<String>
+    ) {
+        if (value == null) return
+
+        val toleratedMinimum = config.minArsPerKm * (1.0 - (config.reviewTolerancePercent / 100.0))
+        when {
+            value < toleratedMinimum && shouldReviewLowArsPerKm(
+                arsPerKm = value,
+                input = input,
+                arsPerHour = arsPerHour,
+                estimatedNetProfit = estimatedNetProfit,
+                config = config
+            ) -> reviewReasons += "$/km bajo, pero $/h alto: revisar destino"
+            value < toleratedMinimum -> rejectionReasons += "$/km muy bajo para el viaje"
+            value < config.minArsPerKm -> reviewReasons += "$/km dentro de tolerancia"
+        }
+    }
+
+    private fun shouldReviewLowArsPerKm(
+        arsPerKm: Double,
+        input: TripOfferInput,
+        arsPerHour: Double?,
+        estimatedNetProfit: Double?,
+        config: DriverConfig
+    ): Boolean {
+        if (arsPerHour == null || estimatedNetProfit == null) return false
+        if (hasExcessivePickupShare(input)) return false
+
+        val rescueMinimumArsPerKm = config.minArsPerKm * LOW_ARS_PER_KM_REVIEW_RESCUE_RATIO
+        val highArsPerHourMinimum = config.minArsPerHour * HIGH_ARS_PER_HOUR_REVIEW_RESCUE_RATIO
+
+        return arsPerKm >= rescueMinimumArsPerKm &&
+            arsPerHour >= highArsPerHourMinimum &&
+            estimatedNetProfit >= config.minNetProfit
+    }
+
+    private fun hasExcessivePickupShare(input: TripOfferInput): Boolean {
+        val pickupKm = input.pickupKm ?: return false
+        val tripKm = input.tripKm ?: return false
+
+        return pickupKm > tripKm
+    }
+
+    private companion object {
+        const val LOW_ARS_PER_KM_REVIEW_RESCUE_RATIO = 0.70
+        const val HIGH_ARS_PER_HOUR_REVIEW_RESCUE_RATIO = 1.50
     }
 }
