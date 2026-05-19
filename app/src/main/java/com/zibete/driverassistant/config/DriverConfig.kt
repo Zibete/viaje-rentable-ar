@@ -8,8 +8,6 @@ data class DriverConfig(
     val minNetProfit: Double,
     val costPerKm: Double,
     val costPerMinute: Double,
-    val maxPickupKm: Double,
-    val maxPickupMinutes: Double,
     val reviewTolerancePercent: Double,
     val rejectIfUnknownFare: Boolean,
     val rejectIfUnknownDistance: Boolean,
@@ -24,8 +22,6 @@ data class DriverConfig(
             minNetProfit = 1000.0,
             costPerKm = 280.0,
             costPerMinute = 30.0,
-            maxPickupKm = 3.0,
-            maxPickupMinutes = 10.0,
             reviewTolerancePercent = 10.0,
             rejectIfUnknownFare = true,
             rejectIfUnknownDistance = false,
@@ -39,4 +35,3 @@ data class DriverConfig(
         )
     }
 }
-

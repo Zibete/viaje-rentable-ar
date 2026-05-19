@@ -83,8 +83,6 @@ class DataStoreDriverConfigRepository(
             minNetProfit = this[minNetProfitKey] ?: fallbackConfig.minNetProfit,
             costPerKm = this[costPerKmKey] ?: fallbackConfig.costPerKm,
             costPerMinute = this[costPerMinuteKey] ?: fallbackConfig.costPerMinute,
-            maxPickupKm = this[maxPickupKmKey] ?: fallbackConfig.maxPickupKm,
-            maxPickupMinutes = this[maxPickupMinutesKey] ?: fallbackConfig.maxPickupMinutes,
             reviewTolerancePercent = this[reviewTolerancePercentKey] ?: fallbackConfig.reviewTolerancePercent,
             rejectIfUnknownFare = this[rejectIfUnknownFareKey] ?: fallbackConfig.rejectIfUnknownFare,
             rejectIfUnknownDistance = this[rejectIfUnknownDistanceKey] ?: fallbackConfig.rejectIfUnknownDistance,
@@ -101,8 +99,6 @@ class DataStoreDriverConfigRepository(
         this[minNetProfitKey] = config.minNetProfit
         this[costPerKmKey] = config.costPerKm
         this[costPerMinuteKey] = config.costPerMinute
-        this[maxPickupKmKey] = config.maxPickupKm
-        this[maxPickupMinutesKey] = config.maxPickupMinutes
         this[reviewTolerancePercentKey] = config.reviewTolerancePercent
         this[rejectIfUnknownFareKey] = config.rejectIfUnknownFare
         this[rejectIfUnknownDistanceKey] = config.rejectIfUnknownDistance
@@ -184,8 +180,6 @@ class DataStoreDriverConfigRepository(
         private val minNetProfitKey = doublePreferencesKey("min_net_profit")
         private val costPerKmKey = doublePreferencesKey("cost_per_km")
         private val costPerMinuteKey = doublePreferencesKey("cost_per_minute")
-        private val maxPickupKmKey = doublePreferencesKey("max_pickup_km")
-        private val maxPickupMinutesKey = doublePreferencesKey("max_pickup_minutes")
         private val reviewTolerancePercentKey = doublePreferencesKey("review_tolerance_percent")
         private val rejectIfUnknownFareKey = booleanPreferencesKey("reject_if_unknown_fare")
         private val rejectIfUnknownDistanceKey = booleanPreferencesKey("reject_if_unknown_distance")

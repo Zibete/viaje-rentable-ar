@@ -507,18 +507,6 @@ private fun EditableConfigSection(
                 onConfigInputChange = onConfigInputChange
             )
             ConfigNumberField(
-                label = "Pickup maximo km",
-                value = form.maxPickupKm,
-                field = DriverConfigFormField.MAX_PICKUP_KM,
-                onConfigInputChange = onConfigInputChange
-            )
-            ConfigNumberField(
-                label = "Pickup maximo min",
-                value = form.maxPickupMinutes,
-                field = DriverConfigFormField.MAX_PICKUP_MINUTES,
-                onConfigInputChange = onConfigInputChange
-            )
-            ConfigNumberField(
                 label = "Tolerancia revision %",
                 value = form.reviewTolerancePercent,
                 field = DriverConfigFormField.REVIEW_TOLERANCE_PERCENT,

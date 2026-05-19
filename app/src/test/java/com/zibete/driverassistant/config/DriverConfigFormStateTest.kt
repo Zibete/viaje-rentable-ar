@@ -49,8 +49,6 @@ class DriverConfigFormStateTest {
             minNetProfit = "1200",
             costPerKm = "300",
             costPerMinute = "35",
-            maxPickupKm = "4,5",
-            maxPickupMinutes = "12",
             reviewTolerancePercent = "8"
         ).toDriverConfig(baseConfig)
 
@@ -60,8 +58,6 @@ class DriverConfigFormStateTest {
         assertEquals(1200.0, config.minNetProfit, 0.001)
         assertEquals(300.0, config.costPerKm, 0.001)
         assertEquals(35.0, config.costPerMinute, 0.001)
-        assertEquals(4.5, config.maxPickupKm, 0.001)
-        assertEquals(12.0, config.maxPickupMinutes, 0.001)
         assertEquals(8.0, config.reviewTolerancePercent, 0.001)
     }
 

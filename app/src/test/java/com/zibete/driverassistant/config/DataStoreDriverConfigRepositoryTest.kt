@@ -35,7 +35,6 @@ class DataStoreDriverConfigRepositoryTest {
             minArsPerHour = 8000.0,
             costPerKm = 310.0,
             costPerMinute = 35.0,
-            maxPickupKm = 4.0,
             reviewTolerancePercent = 12.0,
             enabledPlatforms = mapOf(
                 "uber" to true,
