@@ -12,7 +12,6 @@ data class DriverConfig(
     val rejectIfUnknownFare: Boolean,
     val rejectIfUnknownDistance: Boolean,
     val rejectIfAvoidZoneDetected: Boolean,
-    val enabledPlatforms: Map<String, Boolean>,
     val avoidZones: List<AvoidZoneRule>
 ) {
     companion object {
@@ -26,11 +25,6 @@ data class DriverConfig(
             rejectIfUnknownFare = true,
             rejectIfUnknownDistance = false,
             rejectIfAvoidZoneDetected = true,
-            enabledPlatforms = mapOf(
-                "uber" to true,
-                "didi" to true,
-                "cabify" to true
-            ),
             avoidZones = emptyList()
         )
     }

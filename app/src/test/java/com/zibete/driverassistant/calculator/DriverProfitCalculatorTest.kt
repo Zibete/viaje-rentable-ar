@@ -27,6 +27,64 @@ class DriverProfitCalculatorTest {
     }
 
     @Test
+    fun acceptsProfitableTripWhenPlatformIsNull() {
+        val result = calculator.calculate(
+            input = profitableInput(platform = null),
+            config = config
+        )
+
+        assertEquals(DriverDecision.ACCEPT, result.decision)
+        assertTrue(result.reviewReasons.none { it.contains("Plataforma") })
+    }
+
+    @Test
+    fun acceptsProfitableTripWhenPlatformIsUnknown() {
+        val result = calculator.calculate(
+            input = profitableInput(platform = "UNKNOWN"),
+            config = config
+        )
+
+        assertEquals(DriverDecision.ACCEPT, result.decision)
+        assertTrue(result.reviewReasons.none { it.contains("Plataforma") })
+    }
+
+    @Test
+    fun acceptsProfitableTripWhenPlatformWouldPreviouslyBeDisabled() {
+        val result = calculator.calculate(
+            input = profitableInput(platform = "didi"),
+            config = config
+        )
+
+        assertEquals(DriverDecision.ACCEPT, result.decision)
+        assertTrue(result.reviewReasons.none { it.contains("Plataforma") })
+    }
+
+    @Test
+    fun acceptsProfitableTripWithUnknownPlatform() {
+        val result = calculator.calculate(
+            input = profitableInput(platform = "new-platform"),
+            config = config
+        )
+
+        assertEquals(DriverDecision.ACCEPT, result.decision)
+    }
+
+    @Test
+    fun rejectsUnprofitableTripWithUnknownPlatformByProfitability() {
+        val result = calculator.calculate(
+            input = profitableInput(
+                fareAmount = 4000.0,
+                platform = "new-platform"
+            ),
+            config = config
+        )
+
+        assertEquals(DriverDecision.REJECT, result.decision)
+        assertTrue(result.rejectionReasons.any { it.contains("$/km") })
+        assertTrue(result.reviewReasons.none { it.contains("Plataforma") })
+    }
+
+    @Test
     fun rejectsTripWithLowArsPerKm() {
         val result = calculator.calculate(
             input = TripOfferInput(
@@ -245,6 +303,20 @@ class DriverProfitCalculatorTest {
                 platform = "uber"
             ),
             config = config
+        )
+    }
+
+    private fun profitableInput(
+        fareAmount: Double = 10000.0,
+        platform: String?
+    ): TripOfferInput {
+        return TripOfferInput(
+            fareAmount = fareAmount,
+            pickupKm = 1.0,
+            tripKm = 7.0,
+            pickupMinutes = 5.0,
+            tripMinutes = 35.0,
+            platform = platform
         )
     }
 }

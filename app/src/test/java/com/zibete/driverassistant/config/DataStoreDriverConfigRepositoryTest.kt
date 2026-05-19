@@ -36,11 +36,6 @@ class DataStoreDriverConfigRepositoryTest {
             costPerKm = 310.0,
             costPerMinute = 35.0,
             reviewTolerancePercent = 12.0,
-            enabledPlatforms = mapOf(
-                "uber" to true,
-                "didi" to false,
-                "cabify" to true
-            ),
             avoidZones = listOf(
                 AvoidZoneRule(
                     id = "zone-1",
@@ -65,8 +60,7 @@ class DataStoreDriverConfigRepositoryTest {
         val repository = createRepository()
         repository.updateConfig(
             DriverConfig.default().copy(
-                minArsPerKm = 900.0,
-                enabledPlatforms = mapOf("uber" to false)
+                minArsPerKm = 900.0
             )
         )
 

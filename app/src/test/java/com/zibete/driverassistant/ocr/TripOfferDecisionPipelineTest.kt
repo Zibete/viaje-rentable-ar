@@ -117,7 +117,7 @@ class TripOfferDecisionPipelineTest {
         assertEquals(14.7, decision.result.totalKm ?: 0.0, 0.001)
         assertEquals(32.0, decision.result.totalMinutes ?: 0.0, 0.001)
         assertTrue(decision.result.reviewReasons.none { it.contains("Tiempo incompleto") })
-        assertTrue(decision.result.reviewReasons.any { it.contains("Plataforma no detectada") })
+        assertTrue(decision.result.reviewReasons.none { it.contains("Plataforma") })
     }
 
     @Test

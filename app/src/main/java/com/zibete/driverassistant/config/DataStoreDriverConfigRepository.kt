@@ -21,7 +21,6 @@ import java.nio.charset.StandardCharsets
 import java.util.Base64
 
 private const val DRIVER_CONFIG_DATA_STORE_NAME = "driver_config"
-private const val PLATFORM_KEY_PREFIX = "platform_enabled_"
 
 private val Context.driverConfigDataStore: DataStore<Preferences> by preferencesDataStore(
     name = DRIVER_CONFIG_DATA_STORE_NAME
@@ -64,17 +63,6 @@ class DataStoreDriverConfigRepository(
 
     private fun Preferences.toDriverConfig(): DriverConfig {
         val isInitialized = this[initializedKey] == true
-        val storedPlatforms = asMap()
-            .mapNotNull { (key, value) ->
-                if (!key.name.startsWith(PLATFORM_KEY_PREFIX) || value !is Boolean) {
-                    return@mapNotNull null
-                }
-
-                decodeToken(key.name.removePrefix(PLATFORM_KEY_PREFIX))?.let { platform ->
-                    platform to value
-                }
-            }
-            .toMap()
         val storedAvoidZones = this[avoidZonesKey].orEmpty().decodeAvoidZones()
 
         return fallbackConfig.copy(
@@ -88,7 +76,6 @@ class DataStoreDriverConfigRepository(
             rejectIfUnknownDistance = this[rejectIfUnknownDistanceKey] ?: fallbackConfig.rejectIfUnknownDistance,
             rejectIfAvoidZoneDetected = this[rejectIfAvoidZoneDetectedKey]
                 ?: fallbackConfig.rejectIfAvoidZoneDetected,
-            enabledPlatforms = if (isInitialized) storedPlatforms else fallbackConfig.enabledPlatforms,
             avoidZones = if (isInitialized) storedAvoidZones else fallbackConfig.avoidZones
         )
     }
@@ -104,10 +91,6 @@ class DataStoreDriverConfigRepository(
         this[rejectIfUnknownDistanceKey] = config.rejectIfUnknownDistance
         this[rejectIfAvoidZoneDetectedKey] = config.rejectIfAvoidZoneDetected
         this[avoidZonesKey] = config.avoidZones.encodeAvoidZones()
-
-        config.enabledPlatforms.forEach { (platform, enabled) ->
-            this[platformEnabledKey(platform)] = enabled
-        }
     }
 
     private fun Set<String>.decodeAvoidZones(): List<AvoidZoneRule> {
@@ -156,10 +139,6 @@ class DataStoreDriverConfigRepository(
             }
             .toSet()
     }
-
-    private fun platformEnabledKey(platform: String) = booleanPreferencesKey(
-        "$PLATFORM_KEY_PREFIX${encodeToken(platform)}"
-    )
 
     private fun encodeToken(value: String): String {
         return Base64.getUrlEncoder()

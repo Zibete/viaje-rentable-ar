@@ -44,12 +44,6 @@ class DriverProfitCalculator {
             reviewReasons += "OCR ambiguo"
         }
 
-        val normalizedPlatform = input.platform?.trim()?.lowercase()
-        when {
-            normalizedPlatform.isNullOrBlank() -> reviewReasons += "Plataforma no detectada"
-            config.enabledPlatforms[normalizedPlatform] != true -> reviewReasons += "Plataforma no habilitada"
-        }
-
         val arsPerKm = calculateArsPerKm(input.fareAmount, totalKm)
         val arsPerHour = calculateArsPerHour(input.fareAmount, totalMinutes)
         val estimatedCost = calculateEstimatedCost(totalKm, totalMinutes, config)
