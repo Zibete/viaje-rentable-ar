@@ -9,6 +9,7 @@ import android.os.Build
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -21,16 +22,19 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
+import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
@@ -47,6 +51,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -68,6 +73,42 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import kotlin.math.roundToInt
+
+private val AppBackground = Color(0xFF0B0F14)
+private val AppSurface = Color(0xFF121821)
+private val AppSurfaceRaised = Color(0xFF18212D)
+private val AppSurfaceSubtle = Color(0xFF202B38)
+private val AppBorder = Color(0xFF2A3646)
+private val AppText = Color(0xFFEAF0F7)
+private val AppMutedText = Color(0xFFA8B3C2)
+private val AppPrimary = Color(0xFF65D6AD)
+private val AppPrimaryDim = Color(0xFF123B33)
+private val AppWarning = Color(0xFFF7C948)
+private val AppWarningDim = Color(0xFF3B3012)
+private val AppErrorDim = Color(0xFF421C24)
+private val AppError = Color(0xFFFF8A9A)
+
+private val DriverAssistantDarkColorScheme = darkColorScheme(
+    primary = AppPrimary,
+    onPrimary = Color(0xFF06251F),
+    primaryContainer = AppPrimaryDim,
+    onPrimaryContainer = AppText,
+    secondary = Color(0xFF8DB7FF),
+    onSecondary = Color(0xFF071A38),
+    secondaryContainer = Color(0xFF172B4D),
+    onSecondaryContainer = AppText,
+    background = AppBackground,
+    onBackground = AppText,
+    surface = AppSurface,
+    onSurface = AppText,
+    surfaceVariant = AppSurfaceSubtle,
+    onSurfaceVariant = AppMutedText,
+    error = AppError,
+    onError = Color(0xFF33000A),
+    errorContainer = AppErrorDim,
+    onErrorContainer = AppText,
+    outline = AppBorder
+)
 
 @Composable
 fun MainScreen(
@@ -253,52 +294,54 @@ fun MainScreenContent(
     var selectedSectionName by rememberSaveable { mutableStateOf(MainSection.HOME.name) }
     val selectedSection = MainSection.valueOf(selectedSectionName)
 
-    Surface(
-        modifier = Modifier.fillMaxSize(),
-        color = MaterialTheme.colorScheme.background
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .systemBarsPadding()
+    MaterialTheme(colorScheme = DriverAssistantDarkColorScheme) {
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = AppBackground
         ) {
-            AppHeader()
-            MainSectionTabs(
-                selectedSection = selectedSection,
-                onSectionSelected = { section -> selectedSectionName = section.name }
-            )
-
             Column(
                 modifier = Modifier
-                    .weight(1f)
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 20.dp, vertical = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                    .fillMaxSize()
+                    .systemBarsPadding()
             ) {
-                when (selectedSection) {
-                    MainSection.HOME -> HomeSection(
-                        uiState = uiState,
-                        onRequestOverlayPermission = onRequestOverlayPermission,
-                        onRequestScreenCapturePermission = onRequestScreenCapturePermission,
-                        onStartMonitoring = onStartMonitoring,
-                        onStopMonitoring = onStopMonitoring
-                    )
-                    MainSection.SETTINGS -> SettingsSection(
-                        uiState = uiState,
-                        onConfigInputChange = onConfigInputChange,
-                        onSaveConfig = onSaveConfig,
-                        onResetConfig = onResetConfig
-                    )
-                    MainSection.DIAGNOSTIC -> DiagnosticToolsSection(
-                        uiState = uiState,
-                        overlayActionsEnabled = overlayActionsEnabled,
-                        onCaptureFrame = onCaptureFrame,
-                        onAnalyzeOcr = onAnalyzeOcr,
-                        onStopScreenCapture = onStopScreenCapture,
-                        onStopService = onStopService,
-                        onRunSimulatedDecision = onRunSimulatedDecision,
-                        onShowLastRealDecisionOverlay = onShowLastRealDecisionOverlay
-                    )
+                AppHeader()
+                MainSectionTabs(
+                    selectedSection = selectedSection,
+                    onSectionSelected = { section -> selectedSectionName = section.name }
+                )
+
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = 20.dp, vertical = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    when (selectedSection) {
+                        MainSection.HOME -> HomeSection(
+                            uiState = uiState,
+                            onRequestOverlayPermission = onRequestOverlayPermission,
+                            onRequestScreenCapturePermission = onRequestScreenCapturePermission,
+                            onStartMonitoring = onStartMonitoring,
+                            onStopMonitoring = onStopMonitoring
+                        )
+                        MainSection.SETTINGS -> SettingsSection(
+                            uiState = uiState,
+                            onConfigInputChange = onConfigInputChange,
+                            onSaveConfig = onSaveConfig,
+                            onResetConfig = onResetConfig
+                        )
+                        MainSection.DIAGNOSTIC -> DiagnosticToolsSection(
+                            uiState = uiState,
+                            overlayActionsEnabled = overlayActionsEnabled,
+                            onCaptureFrame = onCaptureFrame,
+                            onAnalyzeOcr = onAnalyzeOcr,
+                            onStopScreenCapture = onStopScreenCapture,
+                            onStopService = onStopService,
+                            onRunSimulatedDecision = onRunSimulatedDecision,
+                            onShowLastRealDecisionOverlay = onShowLastRealDecisionOverlay
+                        )
+                    }
                 }
             }
         }
@@ -331,12 +374,28 @@ private fun MainSectionTabs(
     selectedSection: MainSection,
     onSectionSelected: (MainSection) -> Unit
 ) {
-    TabRow(selectedTabIndex = selectedSection.ordinal) {
+    TabRow(
+        selectedTabIndex = selectedSection.ordinal,
+        containerColor = AppBackground,
+        contentColor = AppPrimary
+    ) {
         MainSection.entries.forEach { section ->
             Tab(
                 selected = selectedSection == section,
                 onClick = { onSectionSelected(section) },
-                text = { Text(section.title) }
+                selectedContentColor = AppText,
+                unselectedContentColor = AppMutedText,
+                text = {
+                    Text(
+                        text = section.title,
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = if (selectedSection == section) {
+                            FontWeight.Bold
+                        } else {
+                            FontWeight.SemiBold
+                        }
+                    )
+                }
             )
         }
     }
@@ -382,6 +441,32 @@ private fun startDecisionOverlay(
 }
 
 @Composable
+private fun AppCard(
+    modifier: Modifier = Modifier,
+    containerColor: Color = AppSurface,
+    borderColor: Color = AppBorder,
+    elevation: Dp = 2.dp,
+    content: @Composable () -> Unit
+) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = containerColor),
+        border = BorderStroke(1.dp, borderColor),
+        elevation = CardDefaults.cardElevation(defaultElevation = elevation)
+    ) {
+        content()
+    }
+}
+
+@Composable
+private fun darkOutlinedButtonColors() = ButtonDefaults.outlinedButtonColors(
+    contentColor = AppText,
+    containerColor = AppSurfaceRaised,
+    disabledContentColor = AppMutedText.copy(alpha = 0.45f),
+    disabledContainerColor = AppSurface.copy(alpha = 0.7f)
+)
+
+@Composable
 private fun HomeSection(
     uiState: MainUiState,
     onRequestOverlayPermission: () -> Unit,
@@ -414,15 +499,22 @@ private fun StatusSection(
 ) {
     val homeStatus = uiState.toHomeStatus()
     val containerColor = when (homeStatus) {
-        HomeStatus.READY -> MaterialTheme.colorScheme.primaryContainer
-        HomeStatus.REQUIRES_PERMISSIONS -> MaterialTheme.colorScheme.errorContainer
-        HomeStatus.MONITORING -> MaterialTheme.colorScheme.secondaryContainer
-        HomeStatus.STOPPED -> MaterialTheme.colorScheme.surfaceVariant
+        HomeStatus.READY -> AppPrimaryDim
+        HomeStatus.REQUIRES_PERMISSIONS -> AppErrorDim
+        HomeStatus.MONITORING -> Color(0xFF172B4D)
+        HomeStatus.STOPPED -> AppSurfaceRaised
+    }
+    val borderColor = when (homeStatus) {
+        HomeStatus.READY -> AppPrimary.copy(alpha = 0.42f)
+        HomeStatus.REQUIRES_PERMISSIONS -> AppError.copy(alpha = 0.48f)
+        HomeStatus.MONITORING -> Color(0xFF8DB7FF).copy(alpha = 0.45f)
+        HomeStatus.STOPPED -> AppBorder
     }
 
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = containerColor)
+    AppCard(
+        containerColor = containerColor,
+        borderColor = borderColor,
+        elevation = 4.dp
     ) {
         Column(
             modifier = Modifier.padding(18.dp),
@@ -460,13 +552,15 @@ private fun StatusSection(
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(
                         modifier = Modifier.fillMaxWidth(),
-                        onClick = onRequestOverlayPermission
+                        onClick = onRequestOverlayPermission,
+                        colors = darkOutlinedButtonColors()
                     ) {
                         Text("Permitir ventana flotante")
                     }
                     OutlinedButton(
                         modifier = Modifier.fillMaxWidth(),
-                        onClick = onRequestScreenCapturePermission
+                        onClick = onRequestScreenCapturePermission,
+                        colors = darkOutlinedButtonColors()
                     ) {
                         Text("Permitir captura de pantalla")
                     }
@@ -484,10 +578,7 @@ private fun PrimaryMonitorSection(
 ) {
     val isMonitoring = uiState.isMonitoringActive()
 
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-    ) {
+    AppCard(containerColor = AppSurface) {
         Column(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -507,14 +598,22 @@ private fun PrimaryMonitorSection(
             if (isMonitoring) {
                 Button(
                     modifier = Modifier.fillMaxWidth(),
-                    onClick = onStopMonitoring
+                    onClick = onStopMonitoring,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = AppError,
+                        contentColor = Color(0xFF220006)
+                    )
                 ) {
                     Text("Detener monitoreo")
                 }
             } else {
                 Button(
                     modifier = Modifier.fillMaxWidth(),
-                    onClick = onStartMonitoring
+                    onClick = onStartMonitoring,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = AppPrimary,
+                        contentColor = Color(0xFF06251F)
+                    )
                 ) {
                     Text("Iniciar monitoreo")
                 }
@@ -532,10 +631,12 @@ private fun PrimaryMonitorSection(
 @Composable
 private fun LastDecisionSection(result: TripDecisionResult?) {
     val containerColor = result?.decision.toDecisionContainerColor()
+    val borderColor = result?.decision?.toDecisionAccentColor() ?: AppBorder
 
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = containerColor)
+    AppCard(
+        containerColor = containerColor,
+        borderColor = borderColor.copy(alpha = 0.55f),
+        elevation = if (result == null) 2.dp else 4.dp
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -555,7 +656,8 @@ private fun LastDecisionSection(result: TripDecisionResult?) {
                 Text(
                     text = result.decision.toSpanishLabel(),
                     style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
+                    color = result.decision.toDecisionAccentColor()
                 )
                 Text(
                     text = "Motivo: ${result.toMainReason()}",
@@ -605,7 +707,8 @@ private fun InfoMetric(
     Surface(
         modifier = modifier,
         shape = MaterialTheme.shapes.small,
-        color = MaterialTheme.colorScheme.surfaceVariant
+        color = AppSurfaceSubtle,
+        border = BorderStroke(1.dp, AppBorder.copy(alpha = 0.7f))
     ) {
         Column(
             modifier = Modifier.padding(12.dp),
@@ -629,7 +732,7 @@ private fun HomeConfigSummarySection(
     form: DriverConfigFormState,
     config: DriverConfig
 ) {
-    Card(modifier = Modifier.fillMaxWidth()) {
+    AppCard(containerColor = AppSurface) {
         Column(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -687,7 +790,7 @@ private fun HomeConfigSummarySection(
                     value = form.reviewTolerancePercent.toPercentInputSummary()
                 )
             }
-            HorizontalDivider()
+            HorizontalDivider(color = AppBorder)
             ReadOnlySettingRow(
                 label = "Reglas activas",
                 value = config.toRulesSummary()
@@ -787,7 +890,7 @@ private fun SettingsSection(
             field = DriverConfigFormField.REVIEW_TOLERANCE_PERCENT,
             onConfigInputChange = onConfigInputChange
         )
-        HorizontalDivider()
+        HorizontalDivider(color = AppBorder)
         ReadOnlySettingRow(
             label = "Tarifa no detectada",
             value = if (config.rejectIfUnknownFare) "Rechazar" else "Revisar"
@@ -828,7 +931,8 @@ private fun SettingsSection(
     uiState.configStatusMessage?.let { message ->
         Text(
             text = message,
-            style = MaterialTheme.typography.bodyMedium
+            style = MaterialTheme.typography.bodyMedium,
+            color = AppPrimary
         )
     }
     Row(
@@ -837,13 +941,18 @@ private fun SettingsSection(
     ) {
         Button(
             modifier = Modifier.weight(1f),
-            onClick = onSaveConfig
+            onClick = onSaveConfig,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = AppPrimary,
+                contentColor = Color(0xFF06251F)
+            )
         ) {
             Text("Guardar")
         }
         OutlinedButton(
             modifier = Modifier.weight(1f),
-            onClick = onResetConfig
+            onClick = onResetConfig,
+            colors = darkOutlinedButtonColors()
         ) {
             Text("Restablecer")
         }
@@ -856,7 +965,7 @@ private fun ConfigGroupCard(
     subtitle: String,
     content: @Composable () -> Unit
 ) {
-    Card(modifier = Modifier.fillMaxWidth()) {
+    AppCard(containerColor = AppSurface) {
         Column(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -914,7 +1023,18 @@ private fun ConfigNumberField(
         onValueChange = { onConfigInputChange(field, it) },
         label = { Text(label) },
         singleLine = true,
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedTextColor = AppText,
+            unfocusedTextColor = AppText,
+            focusedLabelColor = AppPrimary,
+            unfocusedLabelColor = AppMutedText,
+            cursorColor = AppPrimary,
+            focusedBorderColor = AppPrimary,
+            unfocusedBorderColor = AppBorder,
+            focusedContainerColor = AppSurfaceRaised,
+            unfocusedContainerColor = AppSurfaceRaised
+        )
     )
 }
 
@@ -950,20 +1070,23 @@ private fun DiagnosticToolsSection(
         ) {
             OutlinedButton(
                 modifier = Modifier.weight(1f),
-                onClick = onCaptureFrame
+                onClick = onCaptureFrame,
+                colors = darkOutlinedButtonColors()
             ) {
                 Text("Capturar frame")
             }
             OutlinedButton(
                 modifier = Modifier.weight(1f),
-                onClick = onAnalyzeOcr
+                onClick = onAnalyzeOcr,
+                colors = darkOutlinedButtonColors()
             ) {
                 Text("Analizar OCR")
             }
         }
         OutlinedButton(
             modifier = Modifier.fillMaxWidth(),
-            onClick = onStopScreenCapture
+            onClick = onStopScreenCapture,
+            colors = darkOutlinedButtonColors()
         ) {
             Text("Detener captura")
         }
@@ -974,13 +1097,15 @@ private fun DiagnosticToolsSection(
             OutlinedButton(
                 modifier = Modifier.weight(1f),
                 enabled = overlayActionsEnabled,
-                onClick = onRunSimulatedDecision
+                onClick = onRunSimulatedDecision,
+                colors = darkOutlinedButtonColors()
             ) {
                 Text("Overlay simulado")
             }
             OutlinedButton(
                 modifier = Modifier.weight(1f),
-                onClick = onStopService
+                onClick = onStopService,
+                colors = darkOutlinedButtonColors()
             ) {
                 Text("Detener overlay")
             }
@@ -988,7 +1113,8 @@ private fun DiagnosticToolsSection(
         OutlinedButton(
             modifier = Modifier.fillMaxWidth(),
             enabled = overlayActionsEnabled,
-            onClick = onShowLastRealDecisionOverlay
+            onClick = onShowLastRealDecisionOverlay,
+            colors = darkOutlinedButtonColors()
         ) {
             Text("Mostrar última decisión real")
         }
@@ -1075,7 +1201,8 @@ private fun DiagnosticToolsSection(
                     .fillMaxWidth()
                     .heightIn(max = 180.dp),
                 shape = MaterialTheme.shapes.small,
-                color = MaterialTheme.colorScheme.surfaceVariant
+                color = AppSurfaceSubtle,
+                border = BorderStroke(1.dp, AppBorder)
             ) {
                 Text(
                     modifier = Modifier
@@ -1162,10 +1289,18 @@ private fun DriverDecision.toSpanishLabel(): String {
 @Composable
 private fun DriverDecision?.toDecisionContainerColor(): Color {
     return when (this) {
-        DriverDecision.ACCEPT -> Color(0xFFE3F5E8)
-        DriverDecision.REJECT -> MaterialTheme.colorScheme.errorContainer
-        DriverDecision.REVIEW -> Color(0xFFFFF2CC)
-        null -> MaterialTheme.colorScheme.surface
+        DriverDecision.ACCEPT -> Color(0xFF102A24)
+        DriverDecision.REJECT -> AppErrorDim
+        DriverDecision.REVIEW -> AppWarningDim
+        null -> AppSurface
+    }
+}
+
+private fun DriverDecision.toDecisionAccentColor(): Color {
+    return when (this) {
+        DriverDecision.ACCEPT -> AppPrimary
+        DriverDecision.REJECT -> AppError
+        DriverDecision.REVIEW -> AppWarning
     }
 }
 
