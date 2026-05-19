@@ -176,8 +176,12 @@ class TripOfferTextParser(
         return rawText.lineSequence()
             .map { it.trim() }
             .filter { line -> line.hasAdditionalFareContext() }
-            .flatMap { line -> additionalFareRegex.findAll(line) }
-            .mapNotNull { match -> match.groupValues[1].toMoneyOrNull() }
+            .flatMap { line ->
+                additionalFareRegex.findAll(line)
+                    .map { match -> match.toAdditionalFareAmountOrNull(line) }
+            }
+            .filterNotNull()
+            .distinct()
             .sum()
     }
 
@@ -219,6 +223,15 @@ class TripOfferTextParser(
             confidence = confidence,
             lineIndex = lineIndex
         )
+    }
+
+    private fun MatchResult.toAdditionalFareAmountOrNull(line: String): Double? {
+        if (line.hasMetricUnitAfter(range.last)) return null
+
+        return groupValues
+            .drop(1)
+            .firstOrNull { value -> value.isNotBlank() }
+            ?.toMoneyOrNull()
     }
 
     private fun FareCandidate.withDiscardReason(): FareCandidate {
@@ -292,8 +305,14 @@ class TripOfferTextParser(
     private fun String.toMoneyOrNull(): Double? {
         val normalized = replace(" ", "")
         val lastSeparatorIndex = maxOf(normalized.lastIndexOf('.'), normalized.lastIndexOf(','))
+        val hasMixedSeparators = normalized.contains('.') && normalized.contains(',')
         val integerLike = when {
             lastSeparatorIndex < 0 -> normalized
+            hasMixedSeparators -> {
+                val integerPart = normalized.take(lastSeparatorIndex).replace(".", "").replace(",", "")
+                val decimalPart = normalized.drop(lastSeparatorIndex + 1)
+                "$integerPart.$decimalPart"
+            }
             normalized.length - lastSeparatorIndex - 1 == 3 -> {
                 normalized.replace(".", "").replace(",", "")
             }
@@ -329,7 +348,7 @@ class TripOfferTextParser(
     }
 
     private fun String.hasAdditionalFareContext(): Boolean {
-        return normalizeAdditionalFareContext().contains("adicional")
+        return additionalFareContextRegex.containsMatchIn(normalizeAdditionalFareContext())
     }
 
     private fun String.normalizeAdditionalFareContext(): String {
@@ -379,7 +398,7 @@ class TripOfferTextParser(
     private companion object {
         private const val MIN_STANDALONE_FARE = 1_000.0
         private const val MONEY_AMOUNT_PATTERN =
-            """\d{1,3}(?:\s*[.,\s]\s*\d{3})+|\d{4,6}|\d{1,3}(?:[.,]\d{1,2})?"""
+            """\d{1,3}(?:\s*[.,\s]\s*\d{3})+(?:[.,]\d{1,2})?|\d{4,6}|\d{1,3}(?:[.,]\d{1,2})?"""
         private const val TIME_DISTANCE_PATTERN =
             """([0-9lI|]+(?:[.,][0-9lI|]+)?)\s*(?:m\s*(?:in|n|inutos)?|rnin)\s*(?:\(\s*)?([0-9lI|]+(?:[.,][0-9lI|]+)?)\s*k\s*(?:m|rn|in)(?:\s*\))?"""
 
@@ -390,7 +409,10 @@ class TripOfferTextParser(
             pattern = """(?i)(?:\bARS\b|\$)\s*($MONEY_AMOUNT_PATTERN)"""
         )
         val additionalFareRegex = Regex(
-            pattern = """(?i)(?:\+\s*)?($MONEY_AMOUNT_PATTERN)\s*ARS\b"""
+            pattern = """(?i)(?:(?:\+\s*)?(?:\$\s*)?($MONEY_AMOUNT_PATTERN)\s*(?:ARS|pesos)\b|\b(?:ARS|pesos)\b\s*(?:\+\s*)?(?:\$\s*)?($MONEY_AMOUNT_PATTERN)|\+\s*\$?\s*($MONEY_AMOUNT_PATTERN)|\$\s*(?:\+\s*)?($MONEY_AMOUNT_PATTERN))"""
+        )
+        val additionalFareContextRegex = Regex(
+            pattern = """\b(?:adicional(?:es)?|incluye(?:n)?|incluido(?:s|as)?|suman|agrega(?:n)?)\b"""
         )
         val standaloneLargeFareRegex = Regex(
             pattern = """(?<![\d.,])($MONEY_AMOUNT_PATTERN)(?![\d.,])"""
