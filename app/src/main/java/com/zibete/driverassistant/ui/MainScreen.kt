@@ -17,15 +17,19 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -37,9 +41,11 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
@@ -244,6 +250,9 @@ fun MainScreenContent(
     onSaveConfig: () -> Unit,
     onResetConfig: () -> Unit
 ) {
+    var selectedSectionName by rememberSaveable { mutableStateOf(MainSection.HOME.name) }
+    val selectedSection = MainSection.valueOf(selectedSectionName)
+
     Surface(
         modifier = Modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.background
@@ -252,47 +261,93 @@ fun MainScreenContent(
             modifier = Modifier
                 .fillMaxSize()
                 .systemBarsPadding()
-                .padding(20.dp)
-                .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Text(
-                text = "Viaje Rentable AR",
-                style = MaterialTheme.typography.headlineSmall
+            AppHeader()
+            MainSectionTabs(
+                selectedSection = selectedSection,
+                onSectionSelected = { section -> selectedSectionName = section.name }
             )
 
-            StatusSection(
-                uiState = uiState,
-                onRequestOverlayPermission = onRequestOverlayPermission,
-                onRequestScreenCapturePermission = onRequestScreenCapturePermission
-            )
-            PrimaryMonitorSection(
-                uiState = uiState,
-                onStartMonitoring = onStartMonitoring,
-                onStopMonitoring = onStopMonitoring
-            )
-            LastDecisionSection(
-                result = uiState.lastDecision
-            )
-            ConfigSummarySection(
-                form = uiState.configForm,
-                statusMessage = uiState.configStatusMessage,
-                onConfigInputChange = onConfigInputChange,
-                onSaveConfig = onSaveConfig,
-                onResetConfig = onResetConfig
-            )
-            DiagnosticToolsSection(
-                uiState = uiState,
-                overlayActionsEnabled = overlayActionsEnabled,
-                onCaptureFrame = onCaptureFrame,
-                onAnalyzeOcr = onAnalyzeOcr,
-                onStopScreenCapture = onStopScreenCapture,
-                onStopService = onStopService,
-                onRunSimulatedDecision = onRunSimulatedDecision,
-                onShowLastRealDecisionOverlay = onShowLastRealDecisionOverlay
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 20.dp, vertical = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                when (selectedSection) {
+                    MainSection.HOME -> HomeSection(
+                        uiState = uiState,
+                        onRequestOverlayPermission = onRequestOverlayPermission,
+                        onRequestScreenCapturePermission = onRequestScreenCapturePermission,
+                        onStartMonitoring = onStartMonitoring,
+                        onStopMonitoring = onStopMonitoring
+                    )
+                    MainSection.SETTINGS -> SettingsSection(
+                        uiState = uiState,
+                        onConfigInputChange = onConfigInputChange,
+                        onSaveConfig = onSaveConfig,
+                        onResetConfig = onResetConfig
+                    )
+                    MainSection.DIAGNOSTIC -> DiagnosticToolsSection(
+                        uiState = uiState,
+                        overlayActionsEnabled = overlayActionsEnabled,
+                        onCaptureFrame = onCaptureFrame,
+                        onAnalyzeOcr = onAnalyzeOcr,
+                        onStopScreenCapture = onStopScreenCapture,
+                        onStopService = onStopService,
+                        onRunSimulatedDecision = onRunSimulatedDecision,
+                        onShowLastRealDecisionOverlay = onShowLastRealDecisionOverlay
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AppHeader() {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp, vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        Text(
+            text = "Viaje Rentable AR",
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold
+        )
+        Text(
+            text = "Asistente visual para evaluar solicitudes de viaje.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+@Composable
+private fun MainSectionTabs(
+    selectedSection: MainSection,
+    onSectionSelected: (MainSection) -> Unit
+) {
+    TabRow(selectedTabIndex = selectedSection.ordinal) {
+        MainSection.entries.forEach { section ->
+            Tab(
+                selected = selectedSection == section,
+                onClick = { onSectionSelected(section) },
+                text = { Text(section.title) }
             )
         }
     }
+}
+
+private enum class MainSection(
+    val title: String
+) {
+    HOME("Inicio"),
+    SETTINGS("Configuración"),
+    DIAGNOSTIC("Diagnóstico")
 }
 
 private fun startDecisionOverlay(
@@ -324,6 +379,31 @@ private fun startDecisionOverlay(
         context.startService(intent)
     }
     viewModel.markOverlayStarted()
+}
+
+@Composable
+private fun HomeSection(
+    uiState: MainUiState,
+    onRequestOverlayPermission: () -> Unit,
+    onRequestScreenCapturePermission: () -> Unit,
+    onStartMonitoring: () -> Unit,
+    onStopMonitoring: () -> Unit
+) {
+    StatusSection(
+        uiState = uiState,
+        onRequestOverlayPermission = onRequestOverlayPermission,
+        onRequestScreenCapturePermission = onRequestScreenCapturePermission
+    )
+    PrimaryMonitorSection(
+        uiState = uiState,
+        onStartMonitoring = onStartMonitoring,
+        onStopMonitoring = onStopMonitoring
+    )
+    LastDecisionSection(result = uiState.lastDecision)
+    HomeConfigSummarySection(
+        form = uiState.configForm,
+        config = uiState.lastConfig ?: DriverConfig.default()
+    )
 }
 
 @Composable
@@ -451,7 +531,12 @@ private fun PrimaryMonitorSection(
 
 @Composable
 private fun LastDecisionSection(result: TripDecisionResult?) {
-    Card(modifier = Modifier.fillMaxWidth()) {
+    val containerColor = result?.decision.toDecisionContainerColor()
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = containerColor)
+    ) {
         Column(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -463,7 +548,7 @@ private fun LastDecisionSection(result: TripDecisionResult?) {
 
             if (result == null) {
                 Text(
-                    text = "Todavía no hay una decisión calculada.",
+                    text = "Cuando se detecte una solicitud, vas a ver acá la recomendación y sus métricas clave.",
                     style = MaterialTheme.typography.bodyMedium
                 )
             } else {
@@ -540,26 +625,21 @@ private fun InfoMetric(
 }
 
 @Composable
-private fun ConfigSummarySection(
+private fun HomeConfigSummarySection(
     form: DriverConfigFormState,
-    statusMessage: String?,
-    onConfigInputChange: (DriverConfigFormField, String) -> Unit,
-    onSaveConfig: () -> Unit,
-    onResetConfig: () -> Unit
+    config: DriverConfig
 ) {
-    var isEditing by rememberSaveable { mutableStateOf(false) }
-
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Text(
-                text = "Configuración",
+                text = "Configuración resumida",
                 style = MaterialTheme.typography.titleLarge
             )
             Text(
-                text = "Criterios locales usados para calcular rentabilidad.",
+                text = "Umbrales locales usados para calcular la recomendación.",
                 style = MaterialTheme.typography.bodyMedium
             )
             Row(
@@ -607,74 +687,217 @@ private fun ConfigSummarySection(
                     value = form.reviewTolerancePercent.toPercentInputSummary()
                 )
             }
-            statusMessage?.let { message ->
-                Text(
-                    text = message,
-                    style = MaterialTheme.typography.bodyMedium
+            HorizontalDivider()
+            ReadOnlySettingRow(
+                label = "Reglas activas",
+                value = config.toRulesSummary()
+            )
+            ReadOnlySettingRow(
+                label = "Zonas a evitar",
+                value = config.avoidZones.count { it.enabled }.toZonesCountText()
+            )
+        }
+    }
+}
+
+@Composable
+private fun SettingsSection(
+    uiState: MainUiState,
+    onConfigInputChange: (DriverConfigFormField, String) -> Unit,
+    onSaveConfig: () -> Unit,
+    onResetConfig: () -> Unit
+) {
+    val form = uiState.configForm
+    val config = uiState.lastConfig ?: DriverConfig.default()
+
+    Text(
+        text = "Configuración",
+        style = MaterialTheme.typography.headlineSmall,
+        fontWeight = FontWeight.Bold
+    )
+    Text(
+        text = "Ajustá los criterios locales que usa la app para recomendar aceptar, revisar o rechazar.",
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+
+    ConfigGroupCard(
+        title = "Rentabilidad mínima",
+        subtitle = "Umbrales que debe cumplir una solicitud para verse rentable."
+    ) {
+        ConfigNumberField(
+            label = "Mínimo ${'$'}/km",
+            value = form.minArsPerKm,
+            field = DriverConfigFormField.MIN_ARS_PER_KM,
+            onConfigInputChange = onConfigInputChange
+        )
+        ConfigNumberField(
+            label = "Mínimo ${'$'}/h",
+            value = form.minArsPerHour,
+            field = DriverConfigFormField.MIN_ARS_PER_HOUR,
+            onConfigInputChange = onConfigInputChange
+        )
+        ConfigNumberField(
+            label = "Ganancia mínima",
+            value = form.minNetProfit,
+            field = DriverConfigFormField.MIN_NET_PROFIT,
+            onConfigInputChange = onConfigInputChange
+        )
+    }
+
+    ConfigGroupCard(
+        title = "Costos estimados",
+        subtitle = "Valores usados para estimar costo y ganancia neta."
+    ) {
+        ConfigNumberField(
+            label = "Costo por km",
+            value = form.costPerKm,
+            field = DriverConfigFormField.COST_PER_KM,
+            onConfigInputChange = onConfigInputChange
+        )
+        ConfigNumberField(
+            label = "Costo por minuto",
+            value = form.costPerMinute,
+            field = DriverConfigFormField.COST_PER_MINUTE,
+            onConfigInputChange = onConfigInputChange
+        )
+    }
+
+    ConfigGroupCard(
+        title = "Límites de búsqueda",
+        subtitle = "La configuración actual no tiene límites máximos editables para llegada al pasajero."
+    ) {
+        ReadOnlySettingRow(
+            label = "Distancia máxima hasta pasajero",
+            value = "Sin límite editable"
+        )
+        ReadOnlySettingRow(
+            label = "Minutos máximos hasta pasajero",
+            value = "Sin límite editable"
+        )
+    }
+
+    ConfigGroupCard(
+        title = "Reglas de revisión y rechazo",
+        subtitle = "Criterios defensivos cuando faltan datos o aparece una zona marcada."
+    ) {
+        ConfigNumberField(
+            label = "Tolerancia de revisión %",
+            value = form.reviewTolerancePercent,
+            field = DriverConfigFormField.REVIEW_TOLERANCE_PERCENT,
+            onConfigInputChange = onConfigInputChange
+        )
+        HorizontalDivider()
+        ReadOnlySettingRow(
+            label = "Tarifa no detectada",
+            value = if (config.rejectIfUnknownFare) "Rechazar" else "Revisar"
+        )
+        ReadOnlySettingRow(
+            label = "Distancia incompleta",
+            value = if (config.rejectIfUnknownDistance) "Rechazar" else "Revisar"
+        )
+        ReadOnlySettingRow(
+            label = "Zona bloqueada detectada",
+            value = if (config.rejectIfAvoidZoneDetected) "Rechazar" else "Revisar"
+        )
+    }
+
+    ConfigGroupCard(
+        title = "Plataformas y zonas",
+        subtitle = "Filtros disponibles en la configuración local actual."
+    ) {
+        ReadOnlySettingRow(
+            label = "Plataformas habilitadas",
+            value = "Sin filtro por plataforma"
+        )
+        if (config.avoidZones.isEmpty()) {
+            ReadOnlySettingRow(
+                label = "Zonas a evitar",
+                value = "No hay zonas configuradas"
+            )
+        } else {
+            config.avoidZones.forEach { zone ->
+                ReadOnlySettingRow(
+                    label = zone.name,
+                    value = if (zone.enabled) zone.policy.name.toZonePolicyLabel() else "Inactiva"
                 )
-            }
-            OutlinedButton(
-                modifier = Modifier.fillMaxWidth(),
-                onClick = { isEditing = !isEditing }
-            ) {
-                Text(if (isEditing) "Ocultar edición" else "Editar configuración")
-            }
-            if (isEditing) {
-                ConfigNumberField(
-                    label = "Mínimo ${'$'}/km",
-                    value = form.minArsPerKm,
-                    field = DriverConfigFormField.MIN_ARS_PER_KM,
-                    onConfigInputChange = onConfigInputChange
-                )
-                ConfigNumberField(
-                    label = "Mínimo ${'$'}/h",
-                    value = form.minArsPerHour,
-                    field = DriverConfigFormField.MIN_ARS_PER_HOUR,
-                    onConfigInputChange = onConfigInputChange
-                )
-                ConfigNumberField(
-                    label = "Ganancia mínima",
-                    value = form.minNetProfit,
-                    field = DriverConfigFormField.MIN_NET_PROFIT,
-                    onConfigInputChange = onConfigInputChange
-                )
-                ConfigNumberField(
-                    label = "Costo por km",
-                    value = form.costPerKm,
-                    field = DriverConfigFormField.COST_PER_KM,
-                    onConfigInputChange = onConfigInputChange
-                )
-                ConfigNumberField(
-                    label = "Costo por minuto",
-                    value = form.costPerMinute,
-                    field = DriverConfigFormField.COST_PER_MINUTE,
-                    onConfigInputChange = onConfigInputChange
-                )
-                ConfigNumberField(
-                    label = "Tolerancia de revisión %",
-                    value = form.reviewTolerancePercent,
-                    field = DriverConfigFormField.REVIEW_TOLERANCE_PERCENT,
-                    onConfigInputChange = onConfigInputChange
-                )
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Button(
-                        modifier = Modifier.weight(1f),
-                        onClick = onSaveConfig
-                    ) {
-                        Text("Guardar")
-                    }
-                    OutlinedButton(
-                        modifier = Modifier.weight(1f),
-                        onClick = onResetConfig
-                    ) {
-                        Text("Restablecer")
-                    }
-                }
             }
         }
+    }
+
+    uiState.configStatusMessage?.let { message ->
+        Text(
+            text = message,
+            style = MaterialTheme.typography.bodyMedium
+        )
+    }
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Button(
+            modifier = Modifier.weight(1f),
+            onClick = onSaveConfig
+        ) {
+            Text("Guardar")
+        }
+        OutlinedButton(
+            modifier = Modifier.weight(1f),
+            onClick = onResetConfig
+        ) {
+            Text("Restablecer")
+        }
+    }
+}
+
+@Composable
+private fun ConfigGroupCard(
+    title: String,
+    subtitle: String,
+    content: @Composable () -> Unit
+) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            content()
+        }
+    }
+}
+
+@Composable
+private fun ReadOnlySettingRow(
+    label: String,
+    value: String
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            modifier = Modifier.weight(1f),
+            text = label,
+            style = MaterialTheme.typography.bodyMedium
+        )
+        Text(
+            modifier = Modifier.weight(1f),
+            text = value,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.SemiBold,
+            textAlign = TextAlign.End
+        )
     }
 }
 
@@ -706,127 +929,161 @@ private fun DiagnosticToolsSection(
     onRunSimulatedDecision: () -> Unit,
     onShowLastRealDecisionOverlay: () -> Unit
 ) {
-    var isExpanded by rememberSaveable { mutableStateOf(false) }
+    Text(
+        text = "Diagnóstico",
+        style = MaterialTheme.typography.headlineSmall,
+        fontWeight = FontWeight.Bold
+    )
+    Text(
+        text = "Herramientas técnicas para revisar captura, OCR y overlay durante desarrollo.",
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
 
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+    ConfigGroupCard(
+        title = "Acciones técnicas",
+        subtitle = "Usalas solo para validar el flujo manualmente."
     ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+            OutlinedButton(
+                modifier = Modifier.weight(1f),
+                onClick = onCaptureFrame
+            ) {
+                Text("Capturar frame")
+            }
+            OutlinedButton(
+                modifier = Modifier.weight(1f),
+                onClick = onAnalyzeOcr
+            ) {
+                Text("Analizar OCR")
+            }
+        }
+        OutlinedButton(
+            modifier = Modifier.fillMaxWidth(),
+            onClick = onStopScreenCapture
+        ) {
+            Text("Detener captura")
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            OutlinedButton(
+                modifier = Modifier.weight(1f),
+                enabled = overlayActionsEnabled,
+                onClick = onRunSimulatedDecision
+            ) {
+                Text("Overlay simulado")
+            }
+            OutlinedButton(
+                modifier = Modifier.weight(1f),
+                onClick = onStopService
+            ) {
+                Text("Detener overlay")
+            }
+        }
+        OutlinedButton(
+            modifier = Modifier.fillMaxWidth(),
+            enabled = overlayActionsEnabled,
+            onClick = onShowLastRealDecisionOverlay
+        ) {
+            Text("Mostrar última decisión real")
+        }
+    }
+
+    ConfigGroupCard(
+        title = "Estado técnico",
+        subtitle = "Lecturas actuales de permisos, servicios y análisis."
+    ) {
+        ReadOnlySettingRow(
+            label = "Ventana flotante",
+            value = uiState.overlayPermissionStatus
+        )
+        ReadOnlySettingRow(
+            label = "Captura",
+            value = uiState.screenCapturePermissionStatus
+        )
+        ReadOnlySettingRow(
+            label = "Monitoreo",
+            value = uiState.monitorStatus
+        )
+        ReadOnlySettingRow(
+            label = "Servicio overlay",
+            value = uiState.serviceStatus
+        )
+        ReadOnlySettingRow(
+            label = "Análisis",
+            value = uiState.ocrStatus
+        )
+        uiState.lastCapturedFrameTimestamp?.let { timestamp ->
+            ReadOnlySettingRow(
+                label = "Última captura",
+                value = timestamp.toDisplayTime()
+            )
+        }
+        if (uiState.lastCapturedFrameWidth != null && uiState.lastCapturedFrameHeight != null) {
+            ReadOnlySettingRow(
+                label = "Tamaño de frame",
+                value = "${uiState.lastCapturedFrameWidth} x ${uiState.lastCapturedFrameHeight}"
+            )
+        }
+        uiState.monitorOverlayStatus?.let { status ->
+            ReadOnlySettingRow(
+                label = "Último overlay",
+                value = status
+            )
+        }
+        uiState.decisionStatusMessage?.let { message ->
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        uiState.screenCaptureErrorMessage?.let { errorMessage ->
+            Text(
+                text = "Captura: $errorMessage",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error
+            )
+        }
+        uiState.ocrErrorMessage?.let { errorMessage ->
+            Text(
+                text = "OCR: $errorMessage",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error
+            )
+        }
+    }
+
+    ConfigGroupCard(
+        title = "Último texto OCR",
+        subtitle = "Texto reconocido más reciente, limitado para no ocupar toda la pantalla."
+    ) {
+        val text = uiState.lastRecognizedText?.takeIf { it.isNotBlank() }
+        if (text == null) {
+            Text(
+                text = "Todavía no hay texto reconocido.",
+                style = MaterialTheme.typography.bodyMedium
+            )
+        } else {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 180.dp),
+                shape = MaterialTheme.shapes.small,
+                color = MaterialTheme.colorScheme.surfaceVariant
             ) {
                 Text(
-                    text = "Herramientas de diagnóstico",
-                    style = MaterialTheme.typography.titleMedium
+                    modifier = Modifier
+                        .verticalScroll(rememberScrollState())
+                        .padding(12.dp),
+                    text = text,
+                    style = MaterialTheme.typography.bodySmall
                 )
-                OutlinedButton(onClick = { isExpanded = !isExpanded }) {
-                    Text(if (isExpanded) "Ocultar" else "Mostrar")
-                }
-            }
-
-            if (isExpanded) {
-                Text(
-                    text = "Captura puntual, análisis manual y pruebas de ventana flotante.",
-                    style = MaterialTheme.typography.bodyMedium
-                )
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    OutlinedButton(
-                        modifier = Modifier.weight(1f),
-                        onClick = onCaptureFrame
-                    ) {
-                        Text("Capturar frame")
-                    }
-                    OutlinedButton(
-                        modifier = Modifier.weight(1f),
-                        onClick = onAnalyzeOcr
-                    ) {
-                        Text("Analizar OCR")
-                    }
-                }
-                OutlinedButton(
-                    modifier = Modifier.fillMaxWidth(),
-                    onClick = onStopScreenCapture
-                ) {
-                    Text("Detener captura")
-                }
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    OutlinedButton(
-                        modifier = Modifier.weight(1f),
-                        enabled = overlayActionsEnabled,
-                        onClick = onRunSimulatedDecision
-                    ) {
-                        Text("Overlay simulado")
-                    }
-                    OutlinedButton(
-                        modifier = Modifier.weight(1f),
-                        onClick = onStopService
-                    ) {
-                        Text("Detener overlay")
-                    }
-                }
-                OutlinedButton(
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = overlayActionsEnabled,
-                    onClick = onShowLastRealDecisionOverlay
-                ) {
-                    Text("Mostrar última decisión real")
-                }
-                Text(
-                    text = "Análisis: ${uiState.ocrStatus}",
-                    style = MaterialTheme.typography.bodyMedium
-                )
-                uiState.decisionStatusMessage?.let { message ->
-                    Text(
-                        text = message,
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                }
-                uiState.lastRecognizedText?.takeIf { it.isNotBlank() }?.let { text ->
-                    Text(
-                        text = "Último texto OCR",
-                        style = MaterialTheme.typography.labelLarge
-                    )
-                    Text(
-                        text = text,
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                }
-                uiState.lastCapturedFrameTimestamp?.let { timestamp ->
-                    Text(
-                        text = "Última captura: ${timestamp.toDisplayTime()}",
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                }
-                if (uiState.lastCapturedFrameWidth != null && uiState.lastCapturedFrameHeight != null) {
-                    Text(
-                        text = "Tamaño de frame: ${uiState.lastCapturedFrameWidth} x ${uiState.lastCapturedFrameHeight}",
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                }
-                uiState.screenCaptureErrorMessage?.let { errorMessage ->
-                    Text(
-                        text = "Captura: $errorMessage",
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                }
-                uiState.ocrErrorMessage?.let { errorMessage ->
-                    Text(
-                        text = "OCR: $errorMessage",
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                }
             }
         }
     }
@@ -902,6 +1159,16 @@ private fun DriverDecision.toSpanishLabel(): String {
     }
 }
 
+@Composable
+private fun DriverDecision?.toDecisionContainerColor(): Color {
+    return when (this) {
+        DriverDecision.ACCEPT -> Color(0xFFE3F5E8)
+        DriverDecision.REJECT -> MaterialTheme.colorScheme.errorContainer
+        DriverDecision.REVIEW -> Color(0xFFFFF2CC)
+        null -> MaterialTheme.colorScheme.surface
+    }
+}
+
 private fun TripDecisionResult.toMainReason(): String {
     return rejectionReasons.firstOrNull()
         ?: reviewReasons.firstOrNull()
@@ -910,6 +1177,32 @@ private fun TripDecisionResult.toMainReason(): String {
             DriverDecision.REJECT -> "No cumple los criterios configurados."
             DriverDecision.REVIEW -> "Conviene revisarlo antes de aceptar."
         }
+}
+
+private fun DriverConfig.toRulesSummary(): String {
+    val activeRules = listOf(
+        rejectIfUnknownFare,
+        rejectIfUnknownDistance,
+        rejectIfAvoidZoneDetected
+    ).count { it }
+
+    return "$activeRules de 3 reglas en rechazo"
+}
+
+private fun Int.toZonesCountText(): String {
+    return when (this) {
+        0 -> "Ninguna activa"
+        1 -> "1 zona activa"
+        else -> "$this zonas activas"
+    }
+}
+
+private fun String.toZonePolicyLabel(): String {
+    return when (this) {
+        "REJECT" -> "Rechazar"
+        "REVIEW" -> "Revisar"
+        else -> "Activa"
+    }
 }
 
 private fun Double?.toDisplayMoney(): String {
