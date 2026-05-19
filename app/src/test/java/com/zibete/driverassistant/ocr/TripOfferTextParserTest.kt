@@ -378,6 +378,109 @@ class TripOfferTextParserTest {
     }
 
     @Test
+    fun sumsIncludedAdditionalFareWithCommaDecimals() {
+        val result = parser.parse(
+            """
+            7.915 ARS
+            se incluyen +960,00 ARS
+            """.trimIndent()
+        )
+
+        assertNotNull(result)
+        assertEquals(8875.0, result?.fareAmount ?: 0.0, 0.001)
+    }
+
+    @Test
+    fun sumsSingularIncludedAdditionalFare() {
+        val result = parser.parse(
+            """
+            7.915 ARS
+            se incluye +960 ARS
+            """.trimIndent()
+        )
+
+        assertNotNull(result)
+        assertEquals(8875.0, result?.fareAmount ?: 0.0, 0.001)
+    }
+
+    @Test
+    fun sumsIncludedAdditionalFareWithDollarSymbol() {
+        val result = parser.parse(
+            """
+            7.915 ARS
+            incluye +${'$'}960
+            """.trimIndent()
+        )
+
+        assertNotNull(result)
+        assertEquals(8875.0, result?.fareAmount ?: 0.0, 0.001)
+    }
+
+    @Test
+    fun sumsIncludedAdditionalFareWithLeadingCurrency() {
+        val result = parser.parse(
+            """
+            7.915 ARS
+            se incluyen ARS +1.200,50
+            """.trimIndent()
+        )
+
+        assertNotNull(result)
+        assertEquals(9115.5, result?.fareAmount ?: 0.0, 0.001)
+    }
+
+    @Test
+    fun parsesIncludedAdditionalFareContextVariants() {
+        listOf(
+            "incluye +960 ARS",
+            "incluyen +960 ARS",
+            "se suman +960 ARS",
+            "se agrega +960 ARS",
+            "se incluyen ARS +960,00"
+        ).forEach { additionalLine ->
+            val result = parser.parse(
+                """
+                7.915 ARS
+                $additionalLine
+                """.trimIndent()
+            )
+
+            assertNotNull(result)
+            assertEquals(additionalLine, 8875.0, result?.fareAmount ?: 0.0, 0.001)
+        }
+    }
+
+    @Test
+    fun doesNotDuplicateRepeatedIncludedAdditionalFare() {
+        val result = parser.parse(
+            """
+            7.915 ARS
+            se incluyen +960,00 ARS
+            se incluyen +960,00 ARS
+            """.trimIndent()
+        )
+
+        assertNotNull(result)
+        assertEquals(8875.0, result?.fareAmount ?: 0.0, 0.001)
+    }
+
+    @Test
+    fun doesNotSumIncludedMetricRatesAsAdditionalFare() {
+        val result = parser.parse(
+            """
+            7.915 ARS
+            se incluyen +${'$'}960/km
+            se incluyen +7503 ARS/h
+            A 3 min (1.3 km) de distancia
+            Viaje de 26 min (11.9 km)
+            """.trimIndent()
+        )
+
+        assertNotNull(result)
+        assertEquals(7915.0, result?.fareAmount ?: 0.0, 0.001)
+    }
+
+    @Test
     fun parsesStructuredOfferWithoutPlatformAndAddsAdditionalFare() {
         val result = parser.parse(
             """
