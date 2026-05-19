@@ -81,14 +81,6 @@ class DriverProfitCalculator {
             rejectionReasons += "Ganancia neta por debajo del minimo"
         }
 
-        if (input.pickupKm != null && input.pickupKm > config.maxPickupKm) {
-            rejectionReasons += "Distancia al pasajero supera el maximo"
-        }
-
-        if (input.pickupMinutes != null && input.pickupMinutes > config.maxPickupMinutes) {
-            rejectionReasons += "Tiempo al pasajero supera el maximo"
-        }
-
         if (zoneMatch != null) {
             when (zoneMatch.policy) {
                 AvoidZonePolicy.REVIEW -> reviewReasons += "Zona de revision: ${zoneMatch.rule.name}"
@@ -172,4 +164,3 @@ class DriverProfitCalculator {
         }
     }
 }
-

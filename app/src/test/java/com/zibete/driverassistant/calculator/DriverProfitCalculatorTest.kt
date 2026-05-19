@@ -81,31 +81,67 @@ class DriverProfitCalculatorTest {
     }
 
     @Test
-    fun rejectsTripWhenPickupKmIsTooHigh() {
+    fun acceptsTripWithHighPickupKmWhenTotalProfitabilityPasses() {
+        val result = calculator.calculate(
+            input = TripOfferInput(
+                fareAmount = 20000.0,
+                pickupKm = 20.0,
+                tripKm = 5.0,
+                pickupMinutes = 5.0,
+                tripMinutes = 15.0,
+                platform = "uber"
+            ),
+            config = config
+        )
+
+        assertEquals(DriverDecision.ACCEPT, result.decision)
+        assertEquals(25.0, result.totalKm ?: 0.0, 0.001)
+    }
+
+    @Test
+    fun acceptsTripWithHighPickupMinutesWhenTotalProfitabilityPasses() {
         val result = calculator.calculate(
             input = TripOfferInput(
                 fareAmount = 10000.0,
-                pickupKm = 4.0,
-                tripKm = 1.0,
-                pickupMinutes = 5.0,
+                pickupKm = 1.0,
+                tripKm = 2.0,
+                pickupMinutes = 60.0,
                 tripMinutes = 10.0,
                 platform = "uber"
             ),
             config = config
         )
 
-        assertEquals(DriverDecision.REJECT, result.decision)
-        assertTrue(result.rejectionReasons.any { it.contains("Distancia al pasajero") })
+        assertEquals(DriverDecision.ACCEPT, result.decision)
+        assertEquals(70.0, result.totalMinutes ?: 0.0, 0.001)
     }
 
     @Test
-    fun rejectsTripWhenPickupMinutesIsTooHigh() {
+    fun rejectsTripWhenHighPickupMakesTotalArsPerKmTooLow() {
+        val result = calculator.calculate(
+            input = TripOfferInput(
+                fareAmount = 10000.0,
+                pickupKm = 20.0,
+                tripKm = 1.0,
+                pickupMinutes = 5.0,
+                tripMinutes = 15.0,
+                platform = "uber"
+            ),
+            config = config
+        )
+
+        assertEquals(DriverDecision.REJECT, result.decision)
+        assertTrue(result.rejectionReasons.any { it.contains("$/km") })
+    }
+
+    @Test
+    fun rejectsTripWhenHighPickupMakesTotalArsPerHourTooLow() {
         val result = calculator.calculate(
             input = TripOfferInput(
                 fareAmount = 10000.0,
                 pickupKm = 1.0,
-                tripKm = 4.0,
-                pickupMinutes = 11.0,
+                tripKm = 1.0,
+                pickupMinutes = 100.0,
                 tripMinutes = 5.0,
                 platform = "uber"
             ),
@@ -113,7 +149,29 @@ class DriverProfitCalculatorTest {
         )
 
         assertEquals(DriverDecision.REJECT, result.decision)
-        assertTrue(result.rejectionReasons.any { it.contains("Tiempo al pasajero") })
+        assertTrue(result.rejectionReasons.any { it.contains("$/hora") })
+    }
+
+    @Test
+    fun rejectsTripWhenHighPickupLeavesNetProfitBelowMinimum() {
+        val result = calculator.calculate(
+            input = TripOfferInput(
+                fareAmount = 10000.0,
+                pickupKm = 20.0,
+                tripKm = 1.0,
+                pickupMinutes = 5.0,
+                tripMinutes = 5.0,
+                platform = "uber"
+            ),
+            config = config.copy(
+                minArsPerKm = 100.0,
+                minArsPerHour = 100.0,
+                minNetProfit = 5000.0
+            )
+        )
+
+        assertEquals(DriverDecision.REJECT, result.decision)
+        assertTrue(result.rejectionReasons.any { it.contains("Ganancia neta") })
     }
 
     @Test
@@ -190,4 +248,3 @@ class DriverProfitCalculatorTest {
         )
     }
 }
-

@@ -6,8 +6,6 @@ data class DriverConfigFormState(
     val minNetProfit: String = "",
     val costPerKm: String = "",
     val costPerMinute: String = "",
-    val maxPickupKm: String = "",
-    val maxPickupMinutes: String = "",
     val reviewTolerancePercent: String = ""
 ) {
     fun update(
@@ -20,8 +18,6 @@ data class DriverConfigFormState(
             DriverConfigFormField.MIN_NET_PROFIT -> copy(minNetProfit = value)
             DriverConfigFormField.COST_PER_KM -> copy(costPerKm = value)
             DriverConfigFormField.COST_PER_MINUTE -> copy(costPerMinute = value)
-            DriverConfigFormField.MAX_PICKUP_KM -> copy(maxPickupKm = value)
-            DriverConfigFormField.MAX_PICKUP_MINUTES -> copy(maxPickupMinutes = value)
             DriverConfigFormField.REVIEW_TOLERANCE_PERCENT -> copy(reviewTolerancePercent = value)
         }
     }
@@ -34,8 +30,6 @@ data class DriverConfigFormState(
         val minNetProfit = parseRequiredNonNegative(minNetProfit, "Ganancia minima")
         val costPerKm = parseRequiredNonNegative(costPerKm, "Costo por km")
         val costPerMinute = parseRequiredNonNegative(costPerMinute, "Costo por minuto")
-        val maxPickupKm = parseRequiredNonNegative(maxPickupKm, "Pickup maximo km")
-        val maxPickupMinutes = parseRequiredNonNegative(maxPickupMinutes, "Pickup maximo min")
         val reviewTolerancePercent = parseRequiredNonNegative(reviewTolerancePercent, "Tolerancia")
 
         val error = listOf(
@@ -44,8 +38,6 @@ data class DriverConfigFormState(
             minNetProfit,
             costPerKm,
             costPerMinute,
-            maxPickupKm,
-            maxPickupMinutes,
             reviewTolerancePercent
         ).firstOrNull { it.errorMessage != null }?.errorMessage
 
@@ -60,8 +52,6 @@ data class DriverConfigFormState(
                 minNetProfit = minNetProfit.value ?: currentConfig.minNetProfit,
                 costPerKm = costPerKm.value ?: currentConfig.costPerKm,
                 costPerMinute = costPerMinute.value ?: currentConfig.costPerMinute,
-                maxPickupKm = maxPickupKm.value ?: currentConfig.maxPickupKm,
-                maxPickupMinutes = maxPickupMinutes.value ?: currentConfig.maxPickupMinutes,
                 reviewTolerancePercent = reviewTolerancePercent.value ?: currentConfig.reviewTolerancePercent
             )
         )
@@ -98,8 +88,6 @@ data class DriverConfigFormState(
                 minNetProfit = config.minNetProfit.toInputText(),
                 costPerKm = config.costPerKm.toInputText(),
                 costPerMinute = config.costPerMinute.toInputText(),
-                maxPickupKm = config.maxPickupKm.toInputText(),
-                maxPickupMinutes = config.maxPickupMinutes.toInputText(),
                 reviewTolerancePercent = config.reviewTolerancePercent.toInputText()
             )
         }
