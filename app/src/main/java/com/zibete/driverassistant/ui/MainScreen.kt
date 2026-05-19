@@ -314,7 +314,12 @@ fun MainScreenContent(
                     modifier = Modifier
                         .weight(1f)
                         .verticalScroll(rememberScrollState())
-                        .padding(horizontal = 20.dp, vertical = 16.dp),
+                        .padding(
+                            start = 20.dp,
+                            top = 16.dp,
+                            end = 20.dp,
+                            bottom = 28.dp
+                        ),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     when (selectedSection) {
