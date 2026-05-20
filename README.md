@@ -14,7 +14,7 @@
 
 ---
 
-![Vista previa de Viaje Rentable AR](docs/assets/readme-preview.svg)
+![Vista previa de Viaje Rentable AR](docs/assets/readme-preview.PNG)
 
 ---
 
