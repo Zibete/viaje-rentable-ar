@@ -14,6 +14,10 @@
 
 ---
 
+![Vista previa de Viaje Rentable AR](docs/assets/readme-preview.svg)
+
+---
+
 > **Viaje Rentable AR** es una app Android gratuita y open source que ayuda a conductores de apps de viaje en Argentina a evaluar rápidamente si una solicitud conviene o no, usando **OCR**, cálculo local de rentabilidad y una recomendación visual superpuesta.
 
 ---
