@@ -94,6 +94,7 @@ La app es solo un **asistente visual e informativo**.
 
 | Recurso | Enlace |
 |---|---|
+| 📲 Instalación | [docs/INSTALLATION.md](docs/INSTALLATION.md) |
 | 🤝 Cómo contribuir | [CONTRIBUTING.md](CONTRIBUTING.md) |
 | 🔐 Privacidad | [docs/PRIVACY.md](docs/PRIVACY.md) |
 | 🧱 Arquitectura | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
@@ -248,11 +249,47 @@ En Windows:
 
 ## 📲 Instalación
 
-Por ahora el proyecto está orientado a build local desde Android Studio o Gradle.
+### Conductores / usuarios finales
 
-En próximas versiones se podrá publicar una APK desde la sección de Releases.
+La primera alpha pública se distribuye como APK experimental para instalación manual:
 
-> ⚠️ La app no está publicada en Google Play. Antes de cualquier publicación formal se deben revisar permisos, disclosures, privacidad y cumplimiento de políticas.
+➡️ [Descargar desde GitHub Releases](https://github.com/Zibete/viaje-rentable-ar/releases/latest)
+
+Pasos básicos:
+
+1. Abrir el enlace de Releases.
+2. Descargar el archivo APK desde la sección **Assets**.
+3. Instalarlo manualmente en Android.
+
+> ⚠️ Esta es una versión **alpha experimental**. Android puede mostrar advertencias porque la instalación se realiza fuera de Play Store.
+
+La app no está publicada en Google Play. Ver la guía completa en [docs/INSTALLATION.md](docs/INSTALLATION.md).
+
+### Desarrolladores
+
+También se puede compilar localmente desde Android Studio o Gradle.
+
+```bash
+./gradlew :app:assembleDebug
+```
+
+En Windows:
+
+```bash
+.\gradlew.bat :app:assembleDebug
+```
+
+El APK debug generado queda en:
+
+```text
+app/build/outputs/apk/debug/app-debug.apk
+```
+
+Para esta primera alpha, si no existe una firma release configurada, ese APK debug se renombra para publicación manual como:
+
+```text
+viaje-rentable-ar-v0.1.0-alpha.apk
+```
 
 ---
 
