@@ -7,7 +7,7 @@ data class TripOfferCandidate(
     val pickupMinutes: Double?,
     val tripMinutes: Double?,
     val platform: String?,
+    val destinationText: String?,
     val rawText: String,
     val confidence: Double
 )
-

@@ -55,7 +55,8 @@ class TripOfferDecisionPipeline(
             "pipeline candidate summary",
             "traceId=${traceId.orNone()}, fare=${candidate.fareAmount}, pickupKm=${candidate.pickupKm}, " +
                 "tripKm=${candidate.tripKm}, pickupMinutes=${candidate.pickupMinutes}, " +
-                "tripMinutes=${candidate.tripMinutes}, platform=${candidate.platform}, confidence=${candidate.confidence}"
+                "tripMinutes=${candidate.tripMinutes}, platform=${candidate.platform}, " +
+                "destinationPresent=${candidate.destinationText != null}, confidence=${candidate.confidence}"
         )
 
         val input = candidate.toTripOfferInput()
@@ -96,6 +97,7 @@ class TripOfferDecisionPipeline(
             pickupMinutes = pickupMinutes,
             tripMinutes = tripMinutes,
             platform = platform,
+            destinationText = destinationText,
             rawText = rawText
         )
     }

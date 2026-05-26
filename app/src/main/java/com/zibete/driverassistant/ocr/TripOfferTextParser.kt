@@ -3,7 +3,8 @@ package com.zibete.driverassistant.ocr
 import com.zibete.driverassistant.debug.DriverAssistantDebugLogger
 
 class TripOfferTextParser(
-    private val textSanitizer: RecognizedTextSanitizer = RecognizedTextSanitizer()
+    private val textSanitizer: RecognizedTextSanitizer = RecognizedTextSanitizer(),
+    private val destinationTextNormalizer: DestinationTextNormalizer = DestinationTextNormalizer()
 ) {
     fun parse(rawText: String, traceId: String? = null): TripOfferCandidate? {
         DriverAssistantDebugLogger.log(
@@ -65,13 +66,14 @@ class TripOfferTextParser(
         } else {
             genericTimes.lastOrNull()
         }
+        val destinationText = parseDestinationText(sanitizedText)
 
         DriverAssistantDebugLogger.log(
             "parser extracted fields",
             "traceId=${traceId.orNone()}, fare=$fare, pickupKm=$pickupKm, tripKm=$tripKm, " +
                 "pickupMinutes=$pickupMinutes, tripMinutes=$tripMinutes, platform=$platform, " +
                 "hasStructuredTripFields=$hasStructuredTripFields, genericDistanceCount=${genericDistances.size}, " +
-                "genericTimeCount=${genericTimes.size}"
+                "genericTimeCount=${genericTimes.size}, destinationPresent=${destinationText != null}"
         )
 
         if (fare == null && pickupKm == null && tripKm == null && pickupMinutes == null && tripMinutes == null && platform == null) {
@@ -93,14 +95,16 @@ class TripOfferTextParser(
             pickupMinutes = pickupMinutes,
             tripMinutes = tripMinutes,
             platform = platform,
+            destinationText = destinationText,
             rawText = sanitizedText,
             confidence = parsedFields.size / ParsedTripField.entries.size.toDouble()
         )
         DriverAssistantDebugLogger.log(
             "parser candidate summary",
-            "traceId=${traceId.orNone()}, fare=${candidate.fareAmount}, pickupKm=${candidate.pickupKm}, " +
-                "tripKm=${candidate.tripKm}, pickupMinutes=${candidate.pickupMinutes}, " +
-                "tripMinutes=${candidate.tripMinutes}, platform=${candidate.platform}, confidence=${candidate.confidence}"
+                "traceId=${traceId.orNone()}, fare=${candidate.fareAmount}, pickupKm=${candidate.pickupKm}, " +
+                    "tripKm=${candidate.tripKm}, pickupMinutes=${candidate.pickupMinutes}, " +
+                    "tripMinutes=${candidate.tripMinutes}, platform=${candidate.platform}, " +
+                    "destinationPresent=${candidate.destinationText != null}, confidence=${candidate.confidence}"
         )
         return candidate
     }
@@ -302,6 +306,47 @@ class TripOfferTextParser(
         }
     }
 
+    private fun parseDestinationText(rawText: String): String? {
+        val lines = rawText.lineSequence()
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+            .toList()
+        if (lines.isEmpty()) return null
+
+        lines.firstNotNullOfOrNull { line ->
+            destinationLabelRegex.find(line)
+                ?.groupValues
+                ?.getOrNull(1)
+                ?.toDestinationCandidateOrNull()
+        }?.let { return it }
+
+        val tripLineIndex = lines.indexOfFirst { line ->
+            structuredTripRegexes.any { regex -> regex.containsMatchIn(line) } ||
+                tripLineHintRegex.containsMatchIn(line)
+        }
+        if (tripLineIndex < 0) return null
+
+        return lines
+            .drop(tripLineIndex + 1)
+            .take(MAX_DESTINATION_LOOKAHEAD_LINES)
+            .firstNotNullOfOrNull { line -> line.toDestinationCandidateOrNull() }
+    }
+
+    private fun String.toDestinationCandidateOrNull(): String? {
+        if (isRejectedDestinationLine()) return null
+        val normalized = destinationTextNormalizer.normalize(this) ?: return null
+        if (normalized.isRejectedDestinationLine()) return null
+        return normalized
+    }
+
+    private fun String.isRejectedDestinationLine(): Boolean {
+        return containsMetricOrNoise() ||
+            destinationActionOrUiRegex.containsMatchIn(this) ||
+            destinationRatingRegex.matches(trim()) ||
+            destinationMostlyNumberRegex.matches(trim()) ||
+            destinationFareRegex.containsMatchIn(this)
+    }
+
     private fun String.toMoneyOrNull(): Double? {
         val normalized = replace(" ", "")
         val lastSeparatorIndex = maxOf(normalized.lastIndexOf('.'), normalized.lastIndexOf(','))
@@ -397,6 +442,7 @@ class TripOfferTextParser(
 
     private companion object {
         private const val MIN_STANDALONE_FARE = 1_000.0
+        private const val MAX_DESTINATION_LOOKAHEAD_LINES = 2
         private const val MONEY_AMOUNT_PATTERN =
             """\d{1,3}(?:\s*[.,\s]\s*\d{3})+(?:[.,]\d{1,2})?|\d{4,6}|\d{1,3}(?:[.,]\d{1,2})?"""
         private const val TIME_DISTANCE_PATTERN =
@@ -449,6 +495,18 @@ class TripOfferTextParser(
             Regex(
                 pattern = """(?is)\bViaje(?:\s*de)?\b.{0,40}?\b$TIME_DISTANCE_PATTERN\b"""
             )
+        )
+        val destinationLabelRegex = Regex(
+            pattern = """(?i)^(?:destino|hacia|hasta)\s*[:\-]\s*(.+)$"""
+        )
+        val tripLineHintRegex = Regex(pattern = """(?i)^\s*viaje\b""")
+        val destinationActionOrUiRegex = Regex(
+            pattern = """(?i)^(?:aceptar|rechazar|revisar|emparejar|ejar|empajar|datos incompletos|casa\s*(?:\?|\d{1,2}/10)|uberx?|didi|cabify|dni\b|comfort\b|exclusivo\b)"""
+        )
+        val destinationRatingRegex = Regex(pattern = """\d+[.,]\d+\s*\(\s*\d+\s*\)""")
+        val destinationMostlyNumberRegex = Regex(pattern = """[\d\s.,:%()]+""")
+        val destinationFareRegex = Regex(
+            pattern = """(?i)(?:ARS|\$|pesos)\s*\d|\d\s*(?:ARS|pesos)\b"""
         )
     }
 }

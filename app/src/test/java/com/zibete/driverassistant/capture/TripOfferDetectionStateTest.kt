@@ -59,6 +59,14 @@ class TripOfferDetectionStateTest {
     }
 
     @Test
+    fun signatureChangesWhenDestinationChanges() {
+        val first = TripOfferSignature.fromTripOfferInput(offerInput(destinationText = "Pilar"))
+        val second = TripOfferSignature.fromTripOfferInput(offerInput(destinationText = "San Miguel"))
+
+        assertNotEquals(first, second)
+    }
+
+    @Test
     fun detectionStateAllowsOnlyFirstOverlayAfterMarkingShown() {
         val state = TripOfferDetectionState()
         val input = offerInput()
@@ -96,6 +104,7 @@ class TripOfferDetectionStateTest {
         pickupMinutes: Double = 5.0,
         tripMinutes: Double = 36.0,
         platform: String? = "uber",
+        destinationText: String? = null,
         rawText: String? = "Uber ARS 5.127 5 min 1 km 36 min 7 km"
     ): TripOfferInput {
         return TripOfferInput(
@@ -105,6 +114,7 @@ class TripOfferDetectionStateTest {
             pickupMinutes = pickupMinutes,
             tripMinutes = tripMinutes,
             platform = platform,
+            destinationText = destinationText,
             rawText = rawText
         )
     }

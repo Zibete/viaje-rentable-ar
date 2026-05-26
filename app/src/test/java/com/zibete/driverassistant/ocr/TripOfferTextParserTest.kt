@@ -220,6 +220,7 @@ class TripOfferTextParserTest {
         assertEquals(26.0, result?.tripMinutes ?: 0.0, 0.001)
         assertEquals(11.9, result?.tripKm ?: 0.0, 0.001)
         assertEquals("uber", result?.platform)
+        assertEquals("Dr Francisco J. Muñiz 5802, Jose C. Paz", result?.destinationText)
     }
 
     @Test
@@ -711,6 +712,82 @@ class TripOfferTextParserTest {
         assertEquals(1.3, result?.pickupKm ?: 0.0, 0.001)
         assertEquals(26.0, result?.tripMinutes ?: 0.0, 0.001)
         assertEquals(11.9, result?.tripKm ?: 0.0, 0.001)
+    }
+
+    @Test
+    fun parsesDestinationLineAfterTripMetrics() {
+        val result = parser.parse(
+            """
+            UberX
+            7.124 ARS
+            A 6 min (2.5 km) de distancia
+            Unnamed Road, Pilar
+            Viaje de 24 min (12.2 km)
+            Florida, Jose C. Paz
+            Emparejar
+            """.trimIndent()
+        )
+
+        assertNotNull(result)
+        assertEquals("Florida, Jose C. Paz", result?.destinationText)
+    }
+
+    @Test
+    fun normalizesSimpleOcrDestinationCharacters() {
+        val result = parser.parse(
+            """
+            UberX
+            5.677 ARS
+            A 3 min (1.3 km) de distancia
+            Viaje de 18 min (8.4 km)
+            Av Test 742O, San MigueI
+            Aceptar
+            """.trimIndent()
+        )
+
+        assertNotNull(result)
+        assertEquals("Av Test 7420, San Miguel", result?.destinationText)
+    }
+
+    @Test
+    fun leavesDestinationNullWhenNoReliableDestinationLineExists() {
+        val result = parser.parse(
+            """
+            UberX
+            5.677 ARS
+            A 3 min (1.3 km) de distancia
+            Viaje de 18 min (8.4 km)
+            Aceptar
+            """.trimIndent()
+        )
+
+        assertNotNull(result)
+        assertEquals(null, result?.destinationText)
+    }
+
+    @Test
+    fun doesNotUsePriceKmMinutesOrButtonsAsDestination() {
+        listOf(
+            "5.677 ARS",
+            "650/km",
+            "18 min",
+            "8.4 km",
+            "Aceptar",
+            "Casa 8/10"
+        ).forEach { line ->
+            val result = parser.parse(
+                """
+                UberX
+                5.677 ARS
+                A 3 min (1.3 km) de distancia
+                Viaje de 18 min (8.4 km)
+                $line
+                """.trimIndent()
+            )
+
+            assertNotNull(line, result)
+            assertEquals(line, null, result?.destinationText)
+        }
     }
 
     private fun assertParsesUberMetrics(

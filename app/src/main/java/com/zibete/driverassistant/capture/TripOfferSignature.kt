@@ -8,7 +8,8 @@ data class TripOfferSignature(
     val tripKm: Double?,
     val pickupMinutes: Double?,
     val tripMinutes: Double?,
-    val platform: String?
+    val platform: String?,
+    val destinationText: String?
 ) {
     companion object {
         fun fromTripOfferInput(input: TripOfferInput): TripOfferSignature {
@@ -18,7 +19,8 @@ data class TripOfferSignature(
                 tripKm = input.tripKm?.roundForSignature(),
                 pickupMinutes = input.pickupMinutes?.roundForSignature(),
                 tripMinutes = input.tripMinutes?.roundForSignature(),
-                platform = input.platform?.trim()?.lowercase()
+                platform = input.platform?.trim()?.lowercase(),
+                destinationText = input.destinationText?.trim()?.lowercase()
             )
         }
 

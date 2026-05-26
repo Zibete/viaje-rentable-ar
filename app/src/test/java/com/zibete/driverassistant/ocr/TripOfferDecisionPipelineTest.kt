@@ -256,6 +256,7 @@ class TripOfferDecisionPipelineTest {
         assertEquals(29.0, decision.result.totalMinutes ?: 0.0, 0.001)
         assertEquals(414.545, decision.result.arsPerKm ?: 0.0, 0.001)
         assertEquals(11321.379, decision.result.arsPerHour ?: 0.0, 0.001)
+        assertEquals("Dr Francisco J. Muñiz 5802, Jose C. Paz", decision.input.destinationText)
     }
 
     @Test

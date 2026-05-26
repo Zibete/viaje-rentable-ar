@@ -7,6 +7,6 @@ data class TripOfferInput(
     val pickupMinutes: Double?,
     val tripMinutes: Double?,
     val platform: String?,
+    val destinationText: String? = null,
     val rawText: String? = null
 )
-
