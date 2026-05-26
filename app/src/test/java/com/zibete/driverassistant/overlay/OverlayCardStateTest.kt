@@ -164,6 +164,13 @@ class OverlayCardStateTest {
         assertEquals("Casa ?", state.homeDirectionText)
     }
 
+    @Test
+    fun simulatedOverlayUsesUnknownHomeDirection() {
+        val state = OverlayCardState.simulatedAccept()
+
+        assertEquals("Casa ?", state.homeDirectionText)
+    }
+
     private fun decisionResult(
         fareAmount: Double?,
         totalKm: Double?,

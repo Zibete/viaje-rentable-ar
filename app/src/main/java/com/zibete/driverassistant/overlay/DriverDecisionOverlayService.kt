@@ -129,6 +129,7 @@ class DriverDecisionOverlayService : Service() {
             addView(overlayText(text = state.fareText, sizeSp = 28f, style = Typeface.BOLD))
             addView(metricRow("${state.arsPerKmText}/km", "${state.arsPerHourText}/h"))
             addView(metricRow(state.totalTimeText, state.totalKmText))
+            addView(homeDirectionText(state.homeDirectionText))
 
             state.shortReason?.takeIf { it.isNotBlank() }?.let { reason ->
                 addView(separator(accentColor))
@@ -167,6 +168,20 @@ class DriverDecisionOverlayService : Service() {
                     style = Typeface.BOLD
                 )
             )
+        }
+    }
+
+    private fun homeDirectionText(text: String): TextView {
+        return overlayText(
+            text = text,
+            sizeSp = 15f,
+            color = Color.rgb(238, 242, 246),
+            style = Typeface.BOLD
+        ).apply {
+            setPadding(0, 7, 0, 0)
+            maxLines = 1
+            maxWidth = 260
+            ellipsize = TextUtils.TruncateAt.END
         }
     }
 
