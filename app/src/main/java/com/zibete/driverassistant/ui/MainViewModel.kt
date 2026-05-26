@@ -14,6 +14,8 @@ import com.zibete.driverassistant.config.DriverConfigFormField
 import com.zibete.driverassistant.config.DriverConfigFormState
 import com.zibete.driverassistant.config.DriverConfigFormValidationResult
 import com.zibete.driverassistant.config.DriverConfigRepository
+import com.zibete.driverassistant.geocoding.HomeAddressConfigResolutionStatus
+import com.zibete.driverassistant.geocoding.HomeAddressConfigResolver
 import com.zibete.driverassistant.ocr.OcrStatus
 import com.zibete.driverassistant.ocr.TripOfferAnalysisResult
 import com.zibete.driverassistant.ocr.TripOfferDecisionPipeline
@@ -26,6 +28,7 @@ import kotlinx.coroutines.launch
 
 class MainViewModel(
     private val configRepository: DriverConfigRepository,
+    private val homeAddressConfigResolver: HomeAddressConfigResolver? = null,
     private val calculator: DriverProfitCalculator = DriverProfitCalculator(),
     private val ocrDecisionPipeline: TripOfferDecisionPipeline = TripOfferDecisionPipeline(
         calculator = calculator
@@ -191,9 +194,11 @@ class MainViewModel(
             }
             is DriverConfigFormValidationResult.Valid -> {
                 viewModelScope.launch {
-                    configRepository.updateConfig(result.config)
+                    val homeResolution = homeAddressConfigResolver?.resolveIfNeeded(result.config)
+                    val configToSave = homeResolution?.config ?: result.config
+                    configRepository.updateConfig(configToSave)
                     _uiState.update {
-                        it.copy(configStatusMessage = "Configuración guardada")
+                        it.copy(configStatusMessage = homeResolution?.status.toConfigStatusMessage())
                     }
                 }
             }
@@ -326,6 +331,16 @@ class MainViewModel(
                 "No se detecto oferta en los ultimos ciclos"
             }
             else -> null
+        }
+    }
+
+    private fun HomeAddressConfigResolutionStatus?.toConfigStatusMessage(): String {
+        return when (this) {
+            HomeAddressConfigResolutionStatus.RESOLVED -> "Configuracion guardada; domicilio configurado"
+            HomeAddressConfigResolutionStatus.NOT_RESOLVED -> "Configuracion guardada; no se pudo resolver domicilio"
+            HomeAddressConfigResolutionStatus.NO_ADDRESS -> "Configuracion guardada; domicilio no configurado"
+            HomeAddressConfigResolutionStatus.ALREADY_RESOLVED,
+            null -> "Configuracion guardada"
         }
     }
 
