@@ -136,6 +136,9 @@ Demuestra:
 - 🧮 **Motor de rentabilidad**
   - Calcula `$ / km`, `$ / hora`, costo estimado y ganancia neta.
 
+- 🏠 **Casa X/10**
+  - Muestra si el destino detectado acerca o aleja al conductor de su domicilio configurado.
+
 - 🧠 **Reglas de decisión**
   - Recomienda aceptar, rechazar o revisar.
 
@@ -150,6 +153,58 @@ Demuestra:
 
 - 🧱 **Base testeable**
   - Tests unitarios para parser, cálculo, frame gate, buffer y pipeline.
+
+---
+
+## 🏠 Casa X/10
+
+`Casa X/10` es una metrica auxiliar e informativa del overlay. Indica si el destino de la solicitud acerca o aleja al conductor del domicilio configurado:
+
+| Valor | Significado |
+|---|---|
+| `10` | El destino acerca claramente al domicilio. |
+| `5` | El resultado es neutral o poco concluyente. |
+| `0` | El destino aleja claramente del domicilio. |
+
+La metrica se calcula aparte de la rentabilidad. No modifica `ACEPTAR`, `RECHAZAR` ni `REVISAR`; esas decisiones siguen saliendo del calculo principal de rentabilidad.
+
+Para calcularla usa:
+
+- domicilio configurado por direccion;
+- geocoding inicial del domicilio a coordenadas locales;
+- ubicacion actual del conductor;
+- destino detectado por OCR;
+- geocoding cacheado del destino.
+
+El overlay muestra `Casa ?` cuando falta algun dato o no es confiable, por ejemplo:
+
+- no hay domicilio configurado o resuelto;
+- falta permiso o dato de ubicacion actual;
+- el OCR no detecto un destino claro;
+- Android Geocoder no pudo resolver el destino;
+- el resultado del geocoding tiene baja confianza.
+
+Privacidad y alcance:
+
+- el domicilio y sus coordenadas quedan guardados localmente;
+- la ubicacion se usa para un calculo local en el dispositivo;
+- no se guardan capturas;
+- no se envian capturas ni OCR crudo a servicios externos;
+- el geocoding depende del proveedor Android disponible en el dispositivo;
+- no usa APIs privadas de Uber, DiDi, Cabify ni otras plataformas;
+- no acepta ni rechaza viajes automaticamente.
+
+Limitaciones:
+
+- depende de la precision del OCR;
+- depende de que el destino sea visible en la solicitud;
+- depende de que Android Geocoder resuelva bien direcciones argentinas;
+- es una referencia auxiliar, no una orden de navegacion ni una decision automatica.
+
+Permisos asociados:
+
+- ubicacion aproximada (`ACCESS_COARSE_LOCATION`);
+- ubicacion precisa (`ACCESS_FINE_LOCATION`).
 
 ---
 
@@ -190,6 +245,8 @@ Reglas de zonas / datos incompletos
         ↓
 Cálculo de rentabilidad
         ↓
+Casa X/10 auxiliar
+        ↓
 Overlay visual
 ```
 
@@ -219,6 +276,7 @@ La app permite configurar criterios locales como:
 | Rechazo por tarifa no detectada | Define si una solicitud sin tarifa debe rechazarse. |
 | Rechazo por distancia no detectada | Define si una solicitud sin distancia debe rechazarse. |
 | Zonas a evitar | Textos o zonas que pueden activar revisión/rechazo. |
+| Dirección de domicilio | Dirección local que se resuelve a coordenadas para mostrar `Casa X/10`. |
 
 ---
 
@@ -346,6 +404,7 @@ Comando principal:
 - Agregar templates de Issues y Pull Requests.
 - Validar consumo de memoria/CPU en uso prolongado.
 - Ajustar OCR con casos reales anonimizados.
+- Validar `Casa X/10` con destinos reales y geocoding disponible en Android.
 - Consolidar modo diagnóstico.
 
 ### Mediano plazo
@@ -406,7 +465,10 @@ Principios actuales:
 - no sube capturas a servidores;
 - no guarda imágenes;
 - no vende datos;
-- la configuración queda en el dispositivo.
+- la configuración queda en el dispositivo;
+- el domicilio, sus coordenadas resueltas y la ubicación usada para `Casa X/10` se mantienen locales;
+- no se envían capturas ni OCR crudo para calcular la métrica;
+- el geocoding usa el proveedor Android disponible en el dispositivo.
 
 ➡️ Ver: [docs/PRIVACY.md](docs/PRIVACY.md)
 
