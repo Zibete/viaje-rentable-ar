@@ -28,6 +28,11 @@ import com.zibete.driverassistant.calculator.TripDecisionResult
 import com.zibete.driverassistant.config.DataStoreDriverConfigRepository
 import com.zibete.driverassistant.config.DriverConfig
 import com.zibete.driverassistant.debug.DriverAssistantDebugLogger
+import com.zibete.driverassistant.geocoding.AndroidGeocodingRepository
+import com.zibete.driverassistant.geocoding.CachedGeocodingRepository
+import com.zibete.driverassistant.home.HomeDirectionResult
+import com.zibete.driverassistant.home.HomeDirectionScoreResolver
+import com.zibete.driverassistant.location.FusedDriverLocationProvider
 import com.zibete.driverassistant.ocr.MlKitScreenTextRecognizer
 import com.zibete.driverassistant.ocr.OcrStatus
 import com.zibete.driverassistant.ocr.TripOfferAnalysisResult
@@ -50,7 +55,16 @@ class ScreenCaptureMonitorService : Service() {
     private val frameGate = OcrFrameGate()
     private val traceIdGenerator = OcrTraceIdGenerator()
     private val candidateBuffer = OcrCandidateBuffer()
+    private val homeDirectionScoreUpdateState = HomeDirectionScoreUpdateState()
     private val isProcessingFrame = AtomicBoolean(false)
+    private val homeDirectionScoreResolver: HomeDirectionScoreResolver by lazy {
+        HomeDirectionScoreResolver(
+            geocodingRepository = CachedGeocodingRepository(
+                delegate = AndroidGeocodingRepository(applicationContext)
+            ),
+            driverLocationProvider = FusedDriverLocationProvider(applicationContext)
+        )
+    }
 
     @Volatile
     private var currentConfig: DriverConfig = DriverConfig.default()
@@ -117,6 +131,7 @@ class ScreenCaptureMonitorService : Service() {
     override fun onDestroy() {
         cancelCandidateBufferFlush()
         candidateBuffer.clear()
+        homeDirectionScoreUpdateState.clear()
         releaseCaptureResources()
         textRecognizer.close()
         serviceScope.cancel()
@@ -382,7 +397,9 @@ class ScreenCaptureMonitorService : Service() {
             shouldShowOverlay -> "new decision"
             else -> "duplicate complete offer"
         }
+        val offerKey = TripOfferSignature.fromTripOfferInput(snapshot.input)
         val overlayUpdated = if (shouldShowOverlay) {
+            homeDirectionScoreUpdateState.markActive(offerKey)
             startDecisionOverlay(result, snapshot.traceId, overlayReason)
         } else {
             DriverAssistantDebugLogger.log(
@@ -393,6 +410,9 @@ class ScreenCaptureMonitorService : Service() {
         }
         if (overlayUpdated && hasCompleteData) {
             detectionState.markOverlayShown(snapshot.input)
+        }
+        if (overlayUpdated) {
+            resolveHomeDirectionScore(snapshot, offerKey)
         }
         DriverAssistantDebugLogger.log(
             "monitor candidate selected",
@@ -449,6 +469,7 @@ class ScreenCaptureMonitorService : Service() {
             detectionState.reset()
             candidateBuffer.clear()
             cancelCandidateBufferFlush()
+            homeDirectionScoreUpdateState.clear()
             hideDecisionOverlay("no active offer")
             ScreenCaptureMonitorStatus.NO_OFFER_DETECTED
         } else {
@@ -466,10 +487,42 @@ class ScreenCaptureMonitorService : Service() {
         )
     }
 
+    private fun resolveHomeDirectionScore(
+        snapshot: OcrCandidateSnapshot,
+        offerKey: TripOfferSignature
+    ) {
+        val configSnapshot = currentConfig
+        serviceScope.launch {
+            val homeDirectionResult = homeDirectionScoreResolver.resolve(
+                config = configSnapshot,
+                input = snapshot.input
+            )
+            if (!homeDirectionScoreUpdateState.shouldApply(offerKey)) {
+                DriverAssistantDebugLogger.log(
+                    "monitor home score discarded",
+                    "traceId=${snapshot.traceId}, status=${homeDirectionResult.status}, score=${homeDirectionResult.score}"
+                )
+                return@launch
+            }
+
+            startDecisionOverlay(
+                result = snapshot.result,
+                traceId = snapshot.traceId,
+                reason = "home direction score",
+                homeDirectionResult = homeDirectionResult
+            )
+            DriverAssistantDebugLogger.log(
+                "monitor home score updated",
+                "traceId=${snapshot.traceId}, status=${homeDirectionResult.status}, score=${homeDirectionResult.score}"
+            )
+        }
+    }
+
     private fun startDecisionOverlay(
         result: TripDecisionResult,
         traceId: String,
-        reason: String
+        reason: String,
+        homeDirectionResult: HomeDirectionResult? = null
     ): Boolean {
         if (!Settings.canDrawOverlays(this)) {
             DriverAssistantDebugLogger.log(
@@ -483,7 +536,7 @@ class ScreenCaptureMonitorService : Service() {
             return false
         }
 
-        val overlayState = OverlayCardState.fromDecisionResult(result)
+        val overlayState = OverlayCardState.fromDecisionResult(result, homeDirectionResult)
         val intent = Intent(this, DriverDecisionOverlayService::class.java).apply {
             putExtra(DriverDecisionOverlayService.EXTRA_DECISION, overlayState.decision.name)
             putExtra(DriverDecisionOverlayService.EXTRA_VISUAL_STATE, overlayState.visualState.name)
@@ -493,6 +546,7 @@ class ScreenCaptureMonitorService : Service() {
             putExtra(DriverDecisionOverlayService.EXTRA_ARS_PER_KM_TEXT, overlayState.arsPerKmText)
             putExtra(DriverDecisionOverlayService.EXTRA_TOTAL_TIME_TEXT, overlayState.totalTimeText)
             putExtra(DriverDecisionOverlayService.EXTRA_TOTAL_KM_TEXT, overlayState.totalKmText)
+            putExtra(DriverDecisionOverlayService.EXTRA_HOME_DIRECTION_TEXT, overlayState.homeDirectionText)
             putExtra(DriverDecisionOverlayService.EXTRA_SHORT_REASON, overlayState.shortReason)
         }
 
@@ -608,6 +662,7 @@ class ScreenCaptureMonitorService : Service() {
     private fun releaseCaptureResources() {
         frameGate.reset()
         detectionState.reset()
+        homeDirectionScoreUpdateState.clear()
         isProcessingFrame.set(false)
         overlayVisible = false
         runCatching { virtualDisplay?.release() }

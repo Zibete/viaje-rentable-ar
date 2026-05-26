@@ -2,6 +2,7 @@ package com.zibete.driverassistant.overlay
 
 import com.zibete.driverassistant.calculator.DriverDecision
 import com.zibete.driverassistant.calculator.TripDecisionResult
+import com.zibete.driverassistant.home.HomeDirectionResult
 import kotlin.math.roundToInt
 
 data class OverlayCardState(
@@ -13,10 +14,14 @@ data class OverlayCardState(
     val arsPerKmText: String,
     val totalTimeText: String,
     val totalKmText: String,
+    val homeDirectionText: String = "Casa ?",
     val shortReason: String? = null
 ) {
     companion object {
-        fun fromDecisionResult(result: TripDecisionResult): OverlayCardState {
+        fun fromDecisionResult(
+            result: TripDecisionResult,
+            homeDirectionResult: HomeDirectionResult? = null
+        ): OverlayCardState {
             val hasCompleteData = result.hasCompleteOverlayData()
             return OverlayCardState(
                 decision = result.decision,
@@ -35,6 +40,7 @@ data class OverlayCardState(
                 arsPerKmText = result.arsPerKm.toMoneyText(),
                 totalTimeText = "${result.totalMinutes.toDisplayNumber()} min",
                 totalKmText = "${result.totalKm.toDisplayNumber()} km",
+                homeDirectionText = homeDirectionResult?.shortLabel ?: "Casa ?",
                 shortReason = result.rejectionReasons.firstOrNull()
                     ?: result.reviewReasons.firstOrNull()
                     ?: result.firstMissingOverlayDataReason()

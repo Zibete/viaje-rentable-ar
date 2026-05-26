@@ -454,6 +454,7 @@ private fun startDecisionOverlay(
         putExtra(DriverDecisionOverlayService.EXTRA_ARS_PER_KM_TEXT, overlayState.arsPerKmText)
         putExtra(DriverDecisionOverlayService.EXTRA_TOTAL_TIME_TEXT, overlayState.totalTimeText)
         putExtra(DriverDecisionOverlayService.EXTRA_TOTAL_KM_TEXT, overlayState.totalKmText)
+        putExtra(DriverDecisionOverlayService.EXTRA_HOME_DIRECTION_TEXT, overlayState.homeDirectionText)
         putExtra(DriverDecisionOverlayService.EXTRA_SHORT_REASON, overlayState.shortReason)
     }
 

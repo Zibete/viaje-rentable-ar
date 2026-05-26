@@ -321,6 +321,7 @@ class DriverDecisionOverlayService : Service() {
             arsPerKmText = getStringExtra(EXTRA_ARS_PER_KM_TEXT).orDefault("$ -"),
             totalTimeText = getStringExtra(EXTRA_TOTAL_TIME_TEXT).orDefault("- min"),
             totalKmText = getStringExtra(EXTRA_TOTAL_KM_TEXT).orDefault("- km"),
+            homeDirectionText = getStringExtra(EXTRA_HOME_DIRECTION_TEXT).orDefault("Casa ?"),
             shortReason = getStringExtra(EXTRA_SHORT_REASON)
         )
     }
@@ -365,6 +366,7 @@ class DriverDecisionOverlayService : Service() {
         const val EXTRA_ARS_PER_KM_TEXT = "extra_ars_per_km_text"
         const val EXTRA_TOTAL_TIME_TEXT = "extra_total_time_text"
         const val EXTRA_TOTAL_KM_TEXT = "extra_total_km_text"
+        const val EXTRA_HOME_DIRECTION_TEXT = "extra_home_direction_text"
         const val EXTRA_SHORT_REASON = "extra_short_reason"
 
         private const val NOTIFICATION_CHANNEL_ID = "decision_overlay_service"
