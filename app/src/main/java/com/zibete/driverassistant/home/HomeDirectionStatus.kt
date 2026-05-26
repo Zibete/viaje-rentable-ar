@@ -1,0 +1,10 @@
+package com.zibete.driverassistant.home
+
+enum class HomeDirectionStatus {
+    AVAILABLE,
+    MISSING_HOME_LOCATION,
+    MISSING_CURRENT_LOCATION,
+    MISSING_DESTINATION_TEXT,
+    DESTINATION_NOT_RESOLVED,
+    LOW_CONFIDENCE_DESTINATION
+}
