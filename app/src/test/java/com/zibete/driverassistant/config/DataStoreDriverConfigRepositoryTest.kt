@@ -80,6 +80,54 @@ class DataStoreDriverConfigRepositoryTest {
     }
 
     @Test
+    fun defaultsDoNotIncludeHomeLocation() = runBlocking {
+        val repository = createRepository()
+
+        assertEquals(null, repository.getConfig().toHomeLocationOrNull())
+    }
+
+    @Test
+    fun persistsResolvedHomeAddress() = runBlocking {
+        val repository = createRepository()
+        val resolvedConfig = DriverConfig.default().copy(
+            homeAddress = "Av. Siempre Viva 742, Pilar, Buenos Aires",
+            homeLatitude = -34.458,
+            homeLongitude = -58.914,
+            homeAddressLabel = "Av. Siempre Viva 742",
+            homeResolvedAtMillis = 1_700_000_000_000L,
+            homeGeocodingProvider = "test"
+        )
+
+        repository.updateConfig(resolvedConfig)
+
+        val storedConfig = repository.getConfig()
+        assertEquals(resolvedConfig, storedConfig)
+        assertEquals(-34.458, storedConfig.toHomeLocationOrNull()?.latitude ?: 0.0, 0.001)
+        assertEquals(-58.914, storedConfig.toHomeLocationOrNull()?.longitude ?: 0.0, 0.001)
+    }
+
+    @Test
+    fun doesNotPersistInvalidPartialHomeCoordinates() = runBlocking {
+        val repository = createRepository()
+        repository.updateConfig(
+            DriverConfig.default().copy(
+                homeAddress = "Direccion sin coordenadas validas",
+                homeLatitude = 120.0,
+                homeLongitude = -58.914,
+                homeAddressLabel = "Direccion",
+                homeResolvedAtMillis = 1_700_000_000_000L,
+                homeGeocodingProvider = "test"
+            )
+        )
+
+        val storedConfig = repository.getConfig()
+        assertEquals("Direccion sin coordenadas validas", storedConfig.homeAddress)
+        assertEquals(null, storedConfig.homeLatitude)
+        assertEquals(null, storedConfig.homeLongitude)
+        assertEquals(null, storedConfig.toHomeLocationOrNull())
+    }
+
+    @Test
     fun calculationStillAcceptsReferenceTripWithPersistedDefaults() = runBlocking {
         val repository = createRepository()
         val result = calculator.calculate(

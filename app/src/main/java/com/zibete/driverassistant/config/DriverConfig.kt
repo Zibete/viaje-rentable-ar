@@ -12,7 +12,13 @@ data class DriverConfig(
     val rejectIfUnknownFare: Boolean,
     val rejectIfUnknownDistance: Boolean,
     val rejectIfAvoidZoneDetected: Boolean,
-    val avoidZones: List<AvoidZoneRule>
+    val avoidZones: List<AvoidZoneRule>,
+    val homeAddress: String?,
+    val homeLatitude: Double?,
+    val homeLongitude: Double?,
+    val homeAddressLabel: String?,
+    val homeResolvedAtMillis: Long?,
+    val homeGeocodingProvider: String?
 ) {
     companion object {
         fun default(): DriverConfig = DriverConfig(
@@ -25,7 +31,13 @@ data class DriverConfig(
             rejectIfUnknownFare = true,
             rejectIfUnknownDistance = false,
             rejectIfAvoidZoneDetected = true,
-            avoidZones = emptyList()
+            avoidZones = emptyList(),
+            homeAddress = null,
+            homeLatitude = null,
+            homeLongitude = null,
+            homeAddressLabel = null,
+            homeResolvedAtMillis = null,
+            homeGeocodingProvider = null
         )
     }
 }

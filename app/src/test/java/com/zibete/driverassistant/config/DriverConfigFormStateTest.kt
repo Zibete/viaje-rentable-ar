@@ -69,6 +69,73 @@ class DriverConfigFormStateTest {
         assertEquals(baseConfig.avoidZones, config.avoidZones)
     }
 
+    @Test
+    fun emptyHomeAddressClearsCoordinates() {
+        val currentConfig = baseConfig.copy(
+            homeAddress = "Av. Siempre Viva 742",
+            homeLatitude = -34.458,
+            homeLongitude = -58.914,
+            homeAddressLabel = "Av. Siempre Viva 742",
+            homeResolvedAtMillis = 1_700_000_000_000L,
+            homeGeocodingProvider = "test"
+        )
+
+        val result = DriverConfigFormState.fromConfig(currentConfig)
+            .copy(homeAddress = " ")
+            .toDriverConfig(currentConfig)
+
+        val config = (result as DriverConfigFormValidationResult.Valid).config
+        assertEquals(null, config.homeAddress)
+        assertEquals(null, config.homeLatitude)
+        assertEquals(null, config.homeLongitude)
+        assertEquals(null, config.toHomeLocationOrNull())
+    }
+
+    @Test
+    fun keepsResolvedHomeCoordinatesWhenAddressIsUnchanged() {
+        val currentConfig = baseConfig.copy(
+            homeAddress = "Av. Siempre Viva 742",
+            homeLatitude = -34.458,
+            homeLongitude = -58.914,
+            homeAddressLabel = "Av. Siempre Viva 742",
+            homeResolvedAtMillis = 1_700_000_000_000L,
+            homeGeocodingProvider = "test"
+        )
+
+        val result = DriverConfigFormState.fromConfig(currentConfig)
+            .copy(homeAddress = "  Av. Siempre Viva 742  ")
+            .toDriverConfig(currentConfig)
+
+        val config = (result as DriverConfigFormValidationResult.Valid).config
+        assertEquals("Av. Siempre Viva 742", config.homeAddress)
+        assertEquals(-34.458, config.homeLatitude ?: 0.0, 0.001)
+        assertEquals(-58.914, config.homeLongitude ?: 0.0, 0.001)
+    }
+
+    @Test
+    fun changingHomeAddressInvalidatesPreviousCoordinates() {
+        val currentConfig = baseConfig.copy(
+            homeAddress = "Av. Siempre Viva 742",
+            homeLatitude = -34.458,
+            homeLongitude = -58.914,
+            homeAddressLabel = "Av. Siempre Viva 742",
+            homeResolvedAtMillis = 1_700_000_000_000L,
+            homeGeocodingProvider = "test"
+        )
+
+        val result = DriverConfigFormState.fromConfig(currentConfig)
+            .copy(homeAddress = "Calle Nueva 123, Pilar")
+            .toDriverConfig(currentConfig)
+
+        val config = (result as DriverConfigFormValidationResult.Valid).config
+        assertEquals("Calle Nueva 123, Pilar", config.homeAddress)
+        assertEquals(null, config.homeLatitude)
+        assertEquals(null, config.homeLongitude)
+        assertEquals(null, config.homeAddressLabel)
+        assertEquals(null, config.homeResolvedAtMillis)
+        assertEquals(null, config.homeGeocodingProvider)
+    }
+
     private val baseConfig = DriverConfig.default().copy(
         avoidZones = listOf(
             AvoidZoneRule(

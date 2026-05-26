@@ -6,5 +6,6 @@ enum class DriverConfigFormField {
     MIN_NET_PROFIT,
     COST_PER_KM,
     COST_PER_MINUTE,
-    REVIEW_TOLERANCE_PERCENT
+    REVIEW_TOLERANCE_PERCENT,
+    HOME_ADDRESS
 }

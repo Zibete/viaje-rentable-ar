@@ -8,6 +8,8 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.doublePreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
+import androidx.datastore.preferences.core.longPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.zibete.driverassistant.zones.AvoidZonePolicy
@@ -76,7 +78,13 @@ class DataStoreDriverConfigRepository(
             rejectIfUnknownDistance = this[rejectIfUnknownDistanceKey] ?: fallbackConfig.rejectIfUnknownDistance,
             rejectIfAvoidZoneDetected = this[rejectIfAvoidZoneDetectedKey]
                 ?: fallbackConfig.rejectIfAvoidZoneDetected,
-            avoidZones = if (isInitialized) storedAvoidZones else fallbackConfig.avoidZones
+            avoidZones = if (isInitialized) storedAvoidZones else fallbackConfig.avoidZones,
+            homeAddress = this[homeAddressKey] ?: fallbackConfig.homeAddress,
+            homeLatitude = this[homeLatitudeKey] ?: fallbackConfig.homeLatitude,
+            homeLongitude = this[homeLongitudeKey] ?: fallbackConfig.homeLongitude,
+            homeAddressLabel = this[homeAddressLabelKey] ?: fallbackConfig.homeAddressLabel,
+            homeResolvedAtMillis = this[homeResolvedAtMillisKey] ?: fallbackConfig.homeResolvedAtMillis,
+            homeGeocodingProvider = this[homeGeocodingProviderKey] ?: fallbackConfig.homeGeocodingProvider
         )
     }
 
@@ -91,6 +99,16 @@ class DataStoreDriverConfigRepository(
         this[rejectIfUnknownDistanceKey] = config.rejectIfUnknownDistance
         this[rejectIfAvoidZoneDetectedKey] = config.rejectIfAvoidZoneDetected
         this[avoidZonesKey] = config.avoidZones.encodeAvoidZones()
+        config.homeAddress?.takeIf { it.isNotBlank() }?.let { this[homeAddressKey] = it }
+        val homeLatitude = config.homeLatitude
+        val homeLongitude = config.homeLongitude
+        if (homeLatitude != null && homeLongitude != null && homeLatitude in -90.0..90.0 && homeLongitude in -180.0..180.0) {
+            this[homeLatitudeKey] = homeLatitude
+            this[homeLongitudeKey] = homeLongitude
+            config.homeAddressLabel?.takeIf { it.isNotBlank() }?.let { this[homeAddressLabelKey] = it }
+            config.homeResolvedAtMillis?.let { this[homeResolvedAtMillisKey] = it }
+            config.homeGeocodingProvider?.takeIf { it.isNotBlank() }?.let { this[homeGeocodingProviderKey] = it }
+        }
     }
 
     private fun Set<String>.decodeAvoidZones(): List<AvoidZoneRule> {
@@ -164,6 +182,12 @@ class DataStoreDriverConfigRepository(
         private val rejectIfUnknownDistanceKey = booleanPreferencesKey("reject_if_unknown_distance")
         private val rejectIfAvoidZoneDetectedKey = booleanPreferencesKey("reject_if_avoid_zone_detected")
         private val avoidZonesKey = stringSetPreferencesKey("avoid_zones")
+        private val homeAddressKey = stringPreferencesKey("home_address")
+        private val homeLatitudeKey = doublePreferencesKey("home_latitude")
+        private val homeLongitudeKey = doublePreferencesKey("home_longitude")
+        private val homeAddressLabelKey = stringPreferencesKey("home_address_label")
+        private val homeResolvedAtMillisKey = longPreferencesKey("home_resolved_at_millis")
+        private val homeGeocodingProviderKey = stringPreferencesKey("home_geocoding_provider")
 
         private const val RECORD_SEPARATOR = "|"
         private const val KEYWORD_SEPARATOR = ","

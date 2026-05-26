@@ -6,7 +6,8 @@ data class DriverConfigFormState(
     val minNetProfit: String = "",
     val costPerKm: String = "",
     val costPerMinute: String = "",
-    val reviewTolerancePercent: String = ""
+    val reviewTolerancePercent: String = "",
+    val homeAddress: String = ""
 ) {
     fun update(
         field: DriverConfigFormField,
@@ -19,6 +20,7 @@ data class DriverConfigFormState(
             DriverConfigFormField.COST_PER_KM -> copy(costPerKm = value)
             DriverConfigFormField.COST_PER_MINUTE -> copy(costPerMinute = value)
             DriverConfigFormField.REVIEW_TOLERANCE_PERCENT -> copy(reviewTolerancePercent = value)
+            DriverConfigFormField.HOME_ADDRESS -> copy(homeAddress = value)
         }
     }
 
@@ -45,6 +47,10 @@ data class DriverConfigFormState(
             return DriverConfigFormValidationResult.Invalid(error)
         }
 
+        val normalizedHomeAddress = homeAddress.trim().replace(Regex("\\s+"), " ")
+        val previousHomeAddress = currentConfig.homeAddress.orEmpty().trim().replace(Regex("\\s+"), " ")
+        val homeAddressChanged = normalizedHomeAddress != previousHomeAddress
+
         return DriverConfigFormValidationResult.Valid(
             currentConfig.copy(
                 minArsPerKm = minArsPerKm.value ?: currentConfig.minArsPerKm,
@@ -52,7 +58,13 @@ data class DriverConfigFormState(
                 minNetProfit = minNetProfit.value ?: currentConfig.minNetProfit,
                 costPerKm = costPerKm.value ?: currentConfig.costPerKm,
                 costPerMinute = costPerMinute.value ?: currentConfig.costPerMinute,
-                reviewTolerancePercent = reviewTolerancePercent.value ?: currentConfig.reviewTolerancePercent
+                reviewTolerancePercent = reviewTolerancePercent.value ?: currentConfig.reviewTolerancePercent,
+                homeAddress = normalizedHomeAddress.takeIf { it.isNotBlank() },
+                homeLatitude = if (homeAddressChanged) null else currentConfig.homeLatitude,
+                homeLongitude = if (homeAddressChanged) null else currentConfig.homeLongitude,
+                homeAddressLabel = if (homeAddressChanged) null else currentConfig.homeAddressLabel,
+                homeResolvedAtMillis = if (homeAddressChanged) null else currentConfig.homeResolvedAtMillis,
+                homeGeocodingProvider = if (homeAddressChanged) null else currentConfig.homeGeocodingProvider
             )
         )
     }
@@ -88,7 +100,8 @@ data class DriverConfigFormState(
                 minNetProfit = config.minNetProfit.toInputText(),
                 costPerKm = config.costPerKm.toInputText(),
                 costPerMinute = config.costPerMinute.toInputText(),
-                reviewTolerancePercent = config.reviewTolerancePercent.toInputText()
+                reviewTolerancePercent = config.reviewTolerancePercent.toInputText(),
+                homeAddress = config.homeAddress.orEmpty()
             )
         }
 

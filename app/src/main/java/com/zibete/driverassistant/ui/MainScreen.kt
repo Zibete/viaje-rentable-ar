@@ -797,6 +797,11 @@ private fun HomeConfigSummarySection(
             }
             HorizontalDivider(color = AppBorder)
             ReadOnlySettingRow(
+                label = "Domicilio",
+                value = config.toHomeAddressSummary()
+            )
+            HorizontalDivider(color = AppBorder)
+            ReadOnlySettingRow(
                 label = "Reglas activas",
                 value = config.toRulesSummary()
             )
@@ -828,6 +833,22 @@ private fun SettingsSection(
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant
     )
+
+    ConfigGroupCard(
+        title = "Domicilio",
+        subtitle = "Direccion local usada solo para calcular la metrica Casa."
+    ) {
+        ConfigTextField(
+            label = "Direccion de domicilio",
+            value = form.homeAddress,
+            field = DriverConfigFormField.HOME_ADDRESS,
+            onConfigInputChange = onConfigInputChange
+        )
+        ReadOnlySettingRow(
+            label = "Estado",
+            value = config.toHomeAddressStatus()
+        )
+    }
 
     ConfigGroupCard(
         title = "Rentabilidad mínima",
@@ -1029,6 +1050,34 @@ private fun ConfigNumberField(
         label = { Text(label) },
         singleLine = true,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedTextColor = AppText,
+            unfocusedTextColor = AppText,
+            focusedLabelColor = AppPrimary,
+            unfocusedLabelColor = AppMutedText,
+            cursorColor = AppPrimary,
+            focusedBorderColor = AppPrimary,
+            unfocusedBorderColor = AppBorder,
+            focusedContainerColor = AppSurfaceRaised,
+            unfocusedContainerColor = AppSurfaceRaised
+        )
+    )
+}
+
+@Composable
+private fun ConfigTextField(
+    label: String,
+    value: String,
+    field: DriverConfigFormField,
+    onConfigInputChange: (DriverConfigFormField, String) -> Unit
+) {
+    OutlinedTextField(
+        modifier = Modifier.fillMaxWidth(),
+        value = value,
+        onValueChange = { onConfigInputChange(field, it) },
+        label = { Text(label) },
+        singleLine = true,
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
         colors = OutlinedTextFieldDefaults.colors(
             focusedTextColor = AppText,
             unfocusedTextColor = AppText,
@@ -1327,6 +1376,22 @@ private fun DriverConfig.toRulesSummary(): String {
     ).count { it }
 
     return "$activeRules de 3 reglas en rechazo"
+}
+
+private fun DriverConfig.toHomeAddressSummary(): String {
+    return when {
+        homeAddress.isNullOrBlank() -> "No configurado"
+        homeLatitude != null && homeLongitude != null -> "Configurado"
+        else -> "Pendiente de resolver"
+    }
+}
+
+private fun DriverConfig.toHomeAddressStatus(): String {
+    return when {
+        homeAddress.isNullOrBlank() -> "No configurado"
+        homeLatitude != null && homeLongitude != null -> "Domicilio configurado"
+        else -> "Falta resolver direccion"
+    }
 }
 
 private fun Int.toZonesCountText(): String {
