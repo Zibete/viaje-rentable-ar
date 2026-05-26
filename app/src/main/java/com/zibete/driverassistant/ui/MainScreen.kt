@@ -1,10 +1,12 @@
 package com.zibete.driverassistant.ui
 
+import android.Manifest
 import android.app.Activity
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.PackageManager
 import android.os.Build
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -53,6 +55,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -150,6 +153,11 @@ fun MainScreen(
             resolvedViewModel.markMonitorPermissionDenied()
         }
     }
+    val locationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) {
+        resolvedViewModel.refreshLocationPermission(context.hasLocationPermission())
+    }
     val lifecycleOwner = LocalLifecycleOwner.current
 
     DisposableEffect(lifecycleOwner, context) {
@@ -158,10 +166,12 @@ fun MainScreen(
                 resolvedViewModel.refreshOverlayPermission(
                     overlayPermissionHelper.canDrawOverlays(context)
                 )
+                resolvedViewModel.refreshLocationPermission(context.hasLocationPermission())
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         resolvedViewModel.refreshOverlayPermission(overlayPermissionHelper.canDrawOverlays(context))
+        resolvedViewModel.refreshLocationPermission(context.hasLocationPermission())
 
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
@@ -228,6 +238,14 @@ fun MainScreen(
             resolvedViewModel.markScreenCapturePending()
             screenCaptureLauncher.launch(screenCaptureManager.buildPermissionIntent())
         },
+        onRequestLocationPermission = {
+            locationPermissionLauncher.launch(
+                arrayOf(
+                    Manifest.permission.ACCESS_COARSE_LOCATION,
+                    Manifest.permission.ACCESS_FINE_LOCATION
+                )
+            )
+        },
         onStopScreenCapture = {
             resolvedViewModel.updateScreenCaptureSession(screenCaptureManager.stopSession())
         },
@@ -279,6 +297,7 @@ fun MainScreenContent(
     overlayActionsEnabled: Boolean,
     onRequestOverlayPermission: () -> Unit,
     onRequestScreenCapturePermission: () -> Unit,
+    onRequestLocationPermission: () -> Unit,
     onStopScreenCapture: () -> Unit,
     onCaptureFrame: () -> Unit,
     onAnalyzeOcr: () -> Unit,
@@ -327,6 +346,7 @@ fun MainScreenContent(
                             uiState = uiState,
                             onRequestOverlayPermission = onRequestOverlayPermission,
                             onRequestScreenCapturePermission = onRequestScreenCapturePermission,
+                            onRequestLocationPermission = onRequestLocationPermission,
                             onStartMonitoring = onStartMonitoring,
                             onStopMonitoring = onStopMonitoring
                         )
@@ -476,13 +496,15 @@ private fun HomeSection(
     uiState: MainUiState,
     onRequestOverlayPermission: () -> Unit,
     onRequestScreenCapturePermission: () -> Unit,
+    onRequestLocationPermission: () -> Unit,
     onStartMonitoring: () -> Unit,
     onStopMonitoring: () -> Unit
 ) {
     StatusSection(
         uiState = uiState,
         onRequestOverlayPermission = onRequestOverlayPermission,
-        onRequestScreenCapturePermission = onRequestScreenCapturePermission
+        onRequestScreenCapturePermission = onRequestScreenCapturePermission,
+        onRequestLocationPermission = onRequestLocationPermission
     )
     PrimaryMonitorSection(
         uiState = uiState,
@@ -500,7 +522,8 @@ private fun HomeSection(
 private fun StatusSection(
     uiState: MainUiState,
     onRequestOverlayPermission: () -> Unit,
-    onRequestScreenCapturePermission: () -> Unit
+    onRequestScreenCapturePermission: () -> Unit,
+    onRequestLocationPermission: () -> Unit
 ) {
     val homeStatus = uiState.toHomeStatus()
     val containerColor = when (homeStatus) {
@@ -553,6 +576,11 @@ private fun StatusSection(
                     value = uiState.screenCapturePermissionStatus.toScreenCaptureSummary()
                 )
             }
+            InfoMetric(
+                modifier = Modifier.fillMaxWidth(),
+                label = "Ubicacion",
+                value = uiState.locationPermissionStatus.toLocationPermissionSummary()
+            )
             if (homeStatus == HomeStatus.REQUIRES_PERMISSIONS) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(
@@ -568,6 +596,13 @@ private fun StatusSection(
                         colors = darkOutlinedButtonColors()
                     ) {
                         Text("Permitir captura de pantalla")
+                    }
+                    OutlinedButton(
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = onRequestLocationPermission,
+                        colors = darkOutlinedButtonColors()
+                    ) {
+                        Text("Permitir ubicacion")
                     }
                 }
             }
@@ -1279,6 +1314,7 @@ private enum class HomeStatus {
 
 private fun MainUiState.toHomeStatus(): HomeStatus {
     val needsPermission = overlayPermissionStatus != "Otorgado" ||
+        locationPermissionStatus != "Otorgado" ||
         monitorStatus == "Esperando permiso" ||
         monitorErrorMessage?.contains("permiso", ignoreCase = true) == true
 
@@ -1330,6 +1366,10 @@ private fun String.toScreenCaptureSummary(): String {
         "Captura detenida" -> "Detenida"
         else -> "Pendiente"
     }
+}
+
+private fun String.toLocationPermissionSummary(): String {
+    return if (this == "Otorgado") "Permitida" else "Pendiente"
 }
 
 private fun DriverDecision.toSpanishLabel(): String {
@@ -1430,11 +1470,23 @@ private fun Long.toDisplayTime(): String {
     return SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(this))
 }
 
+private fun Context.hasLocationPermission(): Boolean {
+    return ContextCompat.checkSelfPermission(
+        this,
+        Manifest.permission.ACCESS_FINE_LOCATION
+    ) == PackageManager.PERMISSION_GRANTED ||
+        ContextCompat.checkSelfPermission(
+            this,
+            Manifest.permission.ACCESS_COARSE_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED
+}
+
 @Preview(showBackground = true)
 @Composable
 fun MainScreenPreview() {
     val sampleUiState = MainUiState(
         overlayPermissionStatus = "Otorgado",
+        locationPermissionStatus = "Otorgado",
         screenCapturePermissionStatus = "Captura disponible",
         lastCapturedFrameWidth = 1080,
         lastCapturedFrameHeight = 2400,
@@ -1468,6 +1520,7 @@ fun MainScreenPreview() {
             overlayActionsEnabled = true,
             onRequestOverlayPermission = {},
             onRequestScreenCapturePermission = {},
+            onRequestLocationPermission = {},
             onStopScreenCapture = {},
             onCaptureFrame = {},
             onAnalyzeOcr = {},

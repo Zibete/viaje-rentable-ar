@@ -6,6 +6,7 @@ import com.zibete.driverassistant.config.DriverConfigFormState
 
 data class MainUiState(
     val overlayPermissionStatus: String = "Pendiente",
+    val locationPermissionStatus: String = "Pendiente",
     val screenCapturePermissionStatus: String = "Pendiente",
     val screenCaptureErrorMessage: String? = null,
     val lastCapturedFrameWidth: Int? = null,

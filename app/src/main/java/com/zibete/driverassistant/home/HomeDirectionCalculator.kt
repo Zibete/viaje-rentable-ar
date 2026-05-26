@@ -21,9 +21,6 @@ class HomeDirectionCalculator(
         if (homeLocation == null || !homeLocation.hasValidCoordinates()) {
             return HomeDirectionResult.unavailable(HomeDirectionStatus.MISSING_HOME_LOCATION)
         }
-        if (!currentLatitude.isValidLatitude() || !currentLongitude.isValidLongitude()) {
-            return HomeDirectionResult.unavailable(HomeDirectionStatus.MISSING_CURRENT_LOCATION)
-        }
         if (destinationText.isNullOrBlank()) {
             return HomeDirectionResult.unavailable(HomeDirectionStatus.MISSING_DESTINATION_TEXT)
         }
@@ -32,6 +29,9 @@ class HomeDirectionCalculator(
         }
         if ((destinationLocation.confidence ?: 1.0) < lowConfidenceThreshold) {
             return HomeDirectionResult.unavailable(HomeDirectionStatus.LOW_CONFIDENCE_DESTINATION)
+        }
+        if (!currentLatitude.isValidLatitude() || !currentLongitude.isValidLongitude()) {
+            return HomeDirectionResult.unavailable(HomeDirectionStatus.MISSING_CURRENT_LOCATION)
         }
 
         val current = GeoPoint(

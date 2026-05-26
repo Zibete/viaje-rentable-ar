@@ -334,6 +334,18 @@ class MainViewModel(
         }
     }
 
+    fun refreshLocationPermission(hasLocationPermission: Boolean) {
+        _uiState.update {
+            it.copy(
+                locationPermissionStatus = if (hasLocationPermission) {
+                    "Otorgado"
+                } else {
+                    "Falta permiso"
+                }
+            )
+        }
+    }
+
     private fun HomeAddressConfigResolutionStatus?.toConfigStatusMessage(): String {
         return when (this) {
             HomeAddressConfigResolutionStatus.RESOLVED -> "Configuracion guardada; domicilio configurado"
