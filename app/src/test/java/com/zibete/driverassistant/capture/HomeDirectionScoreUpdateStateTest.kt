@@ -20,6 +20,16 @@ class HomeDirectionScoreUpdateStateTest {
     }
 
     @Test
+    fun immediateScoreForActiveOfferKeyIsApplied() {
+        val state = HomeDirectionScoreUpdateState()
+        val key = key(destinationText = "Pilar")
+
+        state.markActive(key)
+
+        assertTrue(state.shouldApply(key))
+    }
+
+    @Test
     fun clearDiscardsPendingKeys() {
         val state = HomeDirectionScoreUpdateState()
         val key = key(destinationText = "Pilar")

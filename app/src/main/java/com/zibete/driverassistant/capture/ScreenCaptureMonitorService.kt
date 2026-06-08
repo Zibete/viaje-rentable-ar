@@ -33,7 +33,9 @@ import com.zibete.driverassistant.geocoding.CachedGeocodingRepository
 import com.zibete.driverassistant.home.HomeDirectionResult
 import com.zibete.driverassistant.home.HomeDirectionScoreResolver
 import com.zibete.driverassistant.home.toDiagnosticShortLabel
+import com.zibete.driverassistant.location.DriverLocationCache
 import com.zibete.driverassistant.location.FusedDriverLocationProvider
+import com.zibete.driverassistant.location.LocationPermissionChecker
 import com.zibete.driverassistant.ocr.MlKitScreenTextRecognizer
 import com.zibete.driverassistant.ocr.OcrStatus
 import com.zibete.driverassistant.ocr.TripOfferAnalysisResult
@@ -57,13 +59,24 @@ class ScreenCaptureMonitorService : Service() {
     private val traceIdGenerator = OcrTraceIdGenerator()
     private val candidateBuffer = OcrCandidateBuffer()
     private val homeDirectionScoreUpdateState = HomeDirectionScoreUpdateState()
+    private val driverLocationCache = DriverLocationCache()
     private val isProcessingFrame = AtomicBoolean(false)
+    private val driverLocationProvider: FusedDriverLocationProvider by lazy {
+        FusedDriverLocationProvider(
+            context = applicationContext,
+            locationCache = driverLocationCache
+        )
+    }
+    private val locationController: ScreenCaptureMonitorLocationController by lazy {
+        ScreenCaptureMonitorLocationController(driverLocationProvider)
+    }
     private val homeDirectionScoreResolver: HomeDirectionScoreResolver by lazy {
         HomeDirectionScoreResolver(
             geocodingRepository = CachedGeocodingRepository(
                 delegate = AndroidGeocodingRepository(applicationContext)
             ),
-            driverLocationProvider = FusedDriverLocationProvider(applicationContext)
+            driverLocationProvider = driverLocationProvider,
+            driverLocationCache = driverLocationCache
         )
     }
 
@@ -141,6 +154,7 @@ class ScreenCaptureMonitorService : Service() {
 
     private fun startMonitoring(resultCode: Int, resultData: Intent) {
         if (mediaProjection != null) {
+            locationController.start()
             publishStatus(ScreenCaptureMonitorStatus.MONITORING)
             return
         }
@@ -209,6 +223,7 @@ class ScreenCaptureMonitorService : Service() {
                 "monitor capture size",
                 "raw=${rawWidth}x$rawHeight, capture=${captureWidth}x$captureHeight, maxWidth=$MAX_CAPTURE_WIDTH"
             )
+            locationController.start()
             publishStatus(ScreenCaptureMonitorStatus.MONITORING)
         }.onFailure { error ->
             publishStatus(
@@ -641,10 +656,16 @@ class ScreenCaptureMonitorService : Service() {
     private fun startMonitorForeground() {
         val notification = buildNotification()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val foregroundServiceType = if (LocationPermissionChecker(this).hasLocationPermission()) {
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION or
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
+            } else {
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
+            }
             startForeground(
                 NOTIFICATION_ID,
                 notification,
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
+                foregroundServiceType
             )
         } else {
             startForeground(NOTIFICATION_ID, notification)
@@ -679,6 +700,8 @@ class ScreenCaptureMonitorService : Service() {
     }
 
     private fun releaseCaptureResources() {
+        locationController.stop()
+        driverLocationCache.clear()
         frameGate.reset()
         detectionState.reset()
         homeDirectionScoreUpdateState.clear()

@@ -7,11 +7,13 @@ import com.zibete.driverassistant.debug.DriverAssistantDebugLogger
 import com.zibete.driverassistant.geocoding.GeocodingRepository
 import com.zibete.driverassistant.geocoding.GeocodingTextNormalizer
 import com.zibete.driverassistant.geocoding.toDestinationLocationOrNull
+import com.zibete.driverassistant.location.DriverLocationCache
 import com.zibete.driverassistant.location.DriverLocationProvider
 
 class HomeDirectionScoreResolver(
     private val geocodingRepository: GeocodingRepository,
     private val driverLocationProvider: DriverLocationProvider,
+    private val driverLocationCache: DriverLocationCache? = null,
     private val calculator: HomeDirectionCalculator = HomeDirectionCalculator(),
     private val geocodingTextNormalizer: GeocodingTextNormalizer = GeocodingTextNormalizer(),
     private val lowConfidenceThreshold: Double = 0.55
@@ -73,6 +75,24 @@ class HomeDirectionScoreResolver(
             ).also { result -> logResult(result) }
         }
 
+        val cachedDriverLocation = driverLocationCache?.getFreshLocation()
+        val cacheSnapshot = driverLocationCache?.snapshot()
+        DriverAssistantDebugLogger.log(
+            "home score cached location",
+            "available=${cachedDriverLocation != null}, ageMs=${cacheSnapshot?.ageMillis}, fresh=${cacheSnapshot?.isFresh}"
+        )
+        if (cachedDriverLocation != null) {
+            DriverAssistantDebugLogger.log("home score location source", "source=cachedLocation")
+            return calculator.calculate(
+                homeLocation = homeLocation,
+                currentLatitude = cachedDriverLocation.location.latitude,
+                currentLongitude = cachedDriverLocation.location.longitude,
+                destinationText = destinationText,
+                destinationLocation = destinationLocation
+            ).also { result -> logResult(result) }
+        }
+
+        DriverAssistantDebugLogger.log("home score location source", "source=fallbackLocation")
         val driverLocationResult = driverLocationProvider.getLastKnownLocation()
         DriverAssistantDebugLogger.log(
             "home driver location",

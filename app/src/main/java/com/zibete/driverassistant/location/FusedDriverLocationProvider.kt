@@ -3,7 +3,6 @@ package com.zibete.driverassistant.location
 import android.content.Context
 import android.location.Location
 import android.os.Looper
-import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationCallback
 import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationResult
@@ -18,12 +17,52 @@ import kotlin.coroutines.resume
 
 class FusedDriverLocationProvider internal constructor(
     private val permissionChecker: DriverLocationPermissionChecker,
-    private val locationClient: FusedDriverLocationClient
-) : DriverLocationProvider {
-    constructor(context: Context) : this(
+    private val locationClient: FusedDriverLocationClient,
+    private val locationCache: DriverLocationCache = DriverLocationCache()
+) : DriverLocationProvider, DriverLocationTracker {
+    private var updatesHandle: DriverLocationUpdatesHandle? = null
+
+    constructor(
+        context: Context,
+        locationCache: DriverLocationCache = DriverLocationCache()
+    ) : this(
         permissionChecker = LocationPermissionChecker(context),
-        locationClient = AndroidFusedDriverLocationClient(context.applicationContext)
+        locationClient = AndroidFusedDriverLocationClient(context.applicationContext),
+        locationCache = locationCache
     )
+
+    override fun startLocationUpdates() {
+        if (updatesHandle != null) {
+            DriverAssistantDebugLogger.log("location cache started", "alreadyStarted=true")
+            return
+        }
+
+        val hasPermission = permissionChecker.hasLocationPermission()
+        DriverAssistantDebugLogger.log(
+            "location cache started",
+            "hasLocationPermission=$hasPermission, priority=BALANCED_POWER_ACCURACY, intervalMs=$TRACKING_INTERVAL_MILLIS"
+        )
+        if (!hasPermission) return
+
+        updatesHandle = locationClient.startLocationUpdates(
+            priority = Priority.PRIORITY_BALANCED_POWER_ACCURACY,
+            intervalMillis = TRACKING_INTERVAL_MILLIS,
+            minIntervalMillis = TRACKING_MIN_INTERVAL_MILLIS
+        ) { location ->
+            val updated = locationCache.update(location)
+            DriverAssistantDebugLogger.log(
+                "cached location update",
+                "available=$updated, accuracyMeters=${location.accuracyMeters}, capturedAtMillis=${location.capturedAtMillis}"
+            )
+        }
+    }
+
+    override fun stopLocationUpdates() {
+        val hadUpdates = updatesHandle != null
+        updatesHandle?.stop()
+        updatesHandle = null
+        DriverAssistantDebugLogger.log("location cache stopped", "hadUpdates=$hadUpdates")
+    }
 
     override suspend fun getLastKnownLocation(): DriverLocationResult {
         val hasPermission = permissionChecker.hasLocationPermission()
@@ -35,12 +74,23 @@ class FusedDriverLocationProvider internal constructor(
             return DriverLocationResult.permissionMissing()
         }
 
+        val cachedLocation = locationCache.getFreshLocation()
+        DriverAssistantDebugLogger.log(
+            "cached location available",
+            "available=${cachedLocation != null}, ageMs=${cachedLocation?.ageMillis}"
+        )
+        if (cachedLocation != null) {
+            DriverAssistantDebugLogger.log("home current location", "source=cachedLocation, available=true")
+            return DriverLocationResult.available(cachedLocation.location)
+        }
+
         val lastLocationResult = runCatching {
             locationClient.getLastLocation()
         }
         val lastLocation = lastLocationResult.getOrNull()
         if (lastLocation != null) {
             DriverAssistantDebugLogger.log("home current location", "source=lastLocation, available=true")
+            locationCache.update(lastLocation)
             return DriverLocationResult.available(lastLocation)
         }
         lastLocationResult.exceptionOrNull()?.let { error ->
@@ -64,6 +114,7 @@ class FusedDriverLocationProvider internal constructor(
         val currentLocation = currentLocationResult.getOrNull()
         if (currentLocation != null) {
             DriverAssistantDebugLogger.log("home current location", "source=currentLocation, available=true")
+            locationCache.update(currentLocation)
             return DriverLocationResult.available(currentLocation)
         }
         DriverAssistantDebugLogger.log(
@@ -86,6 +137,7 @@ class FusedDriverLocationProvider internal constructor(
         return oneShotLocationResult.fold(
             onSuccess = { location ->
                 DriverAssistantDebugLogger.log("home current location", "source=oneShotUpdate, available=${location != null}")
+                location?.let { locationCache.update(it) }
                 location?.let(DriverLocationResult::available) ?: DriverLocationResult.unavailable()
             },
             onFailure = { error ->
@@ -101,6 +153,8 @@ class FusedDriverLocationProvider internal constructor(
     private companion object {
         const val CURRENT_LOCATION_TIMEOUT_MILLIS = 6_000L
         const val ONE_SHOT_LOCATION_TIMEOUT_MILLIS = 8_000L
+        const val TRACKING_INTERVAL_MILLIS = 15_000L
+        const val TRACKING_MIN_INTERVAL_MILLIS = 8_000L
     }
 }
 
@@ -110,6 +164,17 @@ internal interface FusedDriverLocationClient {
     suspend fun getCurrentLocation(priority: Int, timeoutMillis: Long): DriverLocation?
 
     suspend fun requestSingleUpdate(priority: Int, timeoutMillis: Long): DriverLocation?
+
+    fun startLocationUpdates(
+        priority: Int,
+        intervalMillis: Long,
+        minIntervalMillis: Long,
+        onLocation: (DriverLocation) -> Unit
+    ): DriverLocationUpdatesHandle
+}
+
+internal fun interface DriverLocationUpdatesHandle {
+    fun stop()
 }
 
 private class AndroidFusedDriverLocationClient(
@@ -140,6 +205,41 @@ private class AndroidFusedDriverLocationClient(
             awaitSingleLocationUpdate(priority)
         }
         return location?.toDriverLocation()
+    }
+
+    override fun startLocationUpdates(
+        priority: Int,
+        intervalMillis: Long,
+        minIntervalMillis: Long,
+        onLocation: (DriverLocation) -> Unit
+    ): DriverLocationUpdatesHandle {
+        val callback = object : LocationCallback() {
+            override fun onLocationResult(result: LocationResult) {
+                result.locations
+                    .map { location -> location.toDriverLocation() }
+                    .forEach(onLocation)
+            }
+        }
+        val request = LocationRequest.Builder(priority, intervalMillis)
+            .setMinUpdateIntervalMillis(minIntervalMillis)
+            .setMaxUpdateDelayMillis(intervalMillis * 2)
+            .setWaitForAccurateLocation(false)
+            .build()
+
+        fusedLocationClient.requestLocationUpdates(
+            request,
+            callback,
+            Looper.getMainLooper()
+        ).addOnFailureListener { error ->
+            DriverAssistantDebugLogger.log(
+                "location cache start failed",
+                "error=${error.message}"
+            )
+        }
+
+        return DriverLocationUpdatesHandle {
+            fusedLocationClient.removeLocationUpdates(callback)
+        }
     }
 
     private suspend fun awaitSingleLocationUpdate(priority: Int): Location? {

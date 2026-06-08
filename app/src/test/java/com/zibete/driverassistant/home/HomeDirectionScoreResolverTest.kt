@@ -7,6 +7,7 @@ import com.zibete.driverassistant.geocoding.GeocodingRepository
 import com.zibete.driverassistant.geocoding.GeocodingResult
 import com.zibete.driverassistant.geocoding.GeocodingStatus
 import com.zibete.driverassistant.location.DriverLocation
+import com.zibete.driverassistant.location.DriverLocationCache
 import com.zibete.driverassistant.location.DriverLocationProvider
 import com.zibete.driverassistant.location.DriverLocationResult
 import kotlinx.coroutines.runBlocking
@@ -96,6 +97,68 @@ class HomeDirectionScoreResolverTest {
         )
 
         assertEquals(HomeDirectionStatus.MISSING_CURRENT_LOCATION, result.status)
+        assertEquals(1, geocodingRepository.callCount)
+        assertEquals(1, locationProvider.callCount)
+    }
+
+    @Test
+    fun freshCachedLocationProducesScoreWithoutFallbackLookup() = runBlocking {
+        val geocodingRepository = FakeGeocodingRepository(
+            result = destination(latitude = 0.0, longitude = 0.05)
+        )
+        val locationProvider = FakeDriverLocationProvider(DriverLocationResult.unavailable())
+        val locationCache = DriverLocationCache().apply {
+            update(
+                DriverLocation(
+                    latitude = 0.0,
+                    longitude = 0.0,
+                    accuracyMeters = 15f,
+                    capturedAtMillis = 1_700_000_000_000L
+                )
+            )
+        }
+
+        val result = HomeDirectionScoreResolver(
+            geocodingRepository = geocodingRepository,
+            driverLocationProvider = locationProvider,
+            driverLocationCache = locationCache
+        ).resolve(
+            config = resolvedHomeConfig(),
+            input = input(destinationText = "Destino")
+        )
+
+        assertEquals(HomeDirectionStatus.AVAILABLE, result.status)
+        assertEquals(1, geocodingRepository.callCount)
+        assertEquals(0, locationProvider.callCount)
+    }
+
+    @Test
+    fun missingCachedLocationKeepsFallbackLookup() = runBlocking {
+        val geocodingRepository = FakeGeocodingRepository(
+            result = destination(latitude = 0.0, longitude = 0.05)
+        )
+        val locationProvider = FakeDriverLocationProvider(
+            DriverLocationResult.available(
+                DriverLocation(
+                    latitude = 0.0,
+                    longitude = 0.0,
+                    accuracyMeters = 15f,
+                    capturedAtMillis = 1_700_000_000_000L
+                )
+            )
+        )
+        val locationCache = DriverLocationCache()
+
+        val result = HomeDirectionScoreResolver(
+            geocodingRepository = geocodingRepository,
+            driverLocationProvider = locationProvider,
+            driverLocationCache = locationCache
+        ).resolve(
+            config = resolvedHomeConfig(),
+            input = input(destinationText = "Destino")
+        )
+
+        assertEquals(HomeDirectionStatus.AVAILABLE, result.status)
         assertEquals(1, geocodingRepository.callCount)
         assertEquals(1, locationProvider.callCount)
     }
