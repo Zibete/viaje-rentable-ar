@@ -1252,6 +1252,18 @@ private fun DiagnosticToolsSection(
                 value = status
             )
         }
+        uiState.homeDirectionText?.let { homeText ->
+            ReadOnlySettingRow(
+                label = "Casa",
+                value = homeText
+            )
+        }
+        uiState.homeDirectionStatus?.let { homeStatus ->
+            ReadOnlySettingRow(
+                label = "Estado Casa",
+                value = homeStatus
+            )
+        }
         uiState.decisionStatusMessage?.let { message ->
             Text(
                 text = message,

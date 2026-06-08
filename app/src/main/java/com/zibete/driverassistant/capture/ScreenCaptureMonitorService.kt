@@ -32,6 +32,7 @@ import com.zibete.driverassistant.geocoding.AndroidGeocodingRepository
 import com.zibete.driverassistant.geocoding.CachedGeocodingRepository
 import com.zibete.driverassistant.home.HomeDirectionResult
 import com.zibete.driverassistant.home.HomeDirectionScoreResolver
+import com.zibete.driverassistant.home.toDiagnosticShortLabel
 import com.zibete.driverassistant.location.FusedDriverLocationProvider
 import com.zibete.driverassistant.ocr.MlKitScreenTextRecognizer
 import com.zibete.driverassistant.ocr.OcrStatus
@@ -500,7 +501,8 @@ class ScreenCaptureMonitorService : Service() {
             if (!homeDirectionScoreUpdateState.shouldApply(offerKey)) {
                 DriverAssistantDebugLogger.log(
                     "monitor home score discarded",
-                    "traceId=${snapshot.traceId}, status=${homeDirectionResult.status}, score=${homeDirectionResult.score}"
+                    "traceId=${snapshot.traceId}, status=${homeDirectionResult.status}, score=${homeDirectionResult.score}, " +
+                        "reason=stale offer key"
                 )
                 return@launch
             }
@@ -514,6 +516,18 @@ class ScreenCaptureMonitorService : Service() {
             DriverAssistantDebugLogger.log(
                 "monitor home score updated",
                 "traceId=${snapshot.traceId}, status=${homeDirectionResult.status}, score=${homeDirectionResult.score}"
+            )
+            publishStatus(
+                status = if (snapshot.hasCompleteOverlayData) {
+                    ScreenCaptureMonitorStatus.OFFER_DETECTED
+                } else {
+                    ScreenCaptureMonitorStatus.INCOMPLETE_DATA
+                },
+                recognizedText = snapshot.input.rawText,
+                ocrStatus = OcrStatus.TEXT_DETECTED,
+                decisionResult = snapshot.result,
+                overlayUpdated = true,
+                homeDirectionResult = homeDirectionResult
             )
         }
     }
@@ -578,7 +592,8 @@ class ScreenCaptureMonitorService : Service() {
         ocrStatus: OcrStatus = OcrStatus.IDLE,
         errorMessage: String? = null,
         decisionResult: TripDecisionResult? = null,
-        overlayUpdated: Boolean = false
+        overlayUpdated: Boolean = false,
+        homeDirectionResult: HomeDirectionResult? = null
     ) {
         val intent = Intent(ACTION_MONITOR_RESULT).apply {
             putExtra(EXTRA_MONITOR_STATUS, status.name)
@@ -586,6 +601,10 @@ class ScreenCaptureMonitorService : Service() {
             putExtra(EXTRA_OCR_STATUS, ocrStatus.name)
             putExtra(EXTRA_ERROR_MESSAGE, errorMessage)
             putExtra(EXTRA_OVERLAY_UPDATED, overlayUpdated)
+            homeDirectionResult?.let { result ->
+                putExtra(EXTRA_HOME_DIRECTION_STATUS, result.status.name)
+                putExtra(EXTRA_HOME_DIRECTION_TEXT, result.toDiagnosticShortLabel())
+            }
             decisionResult?.writeToIntent(this)
         }
         sendBroadcast(intent.setPackage(packageName))
@@ -702,6 +721,8 @@ class ScreenCaptureMonitorService : Service() {
         const val EXTRA_TOTAL_MINUTES = "extra_total_minutes"
         const val EXTRA_REJECTION_REASONS = "extra_rejection_reasons"
         const val EXTRA_REVIEW_REASONS = "extra_review_reasons"
+        const val EXTRA_HOME_DIRECTION_STATUS = "extra_home_direction_status"
+        const val EXTRA_HOME_DIRECTION_TEXT = "extra_home_direction_text"
 
         private const val NOTIFICATION_CHANNEL_ID = "screen_capture_monitor_service"
         private const val NOTIFICATION_ID = 4301

@@ -5,12 +5,16 @@ import android.content.Context
 import android.content.pm.PackageManager
 import androidx.core.content.ContextCompat
 
+internal interface DriverLocationPermissionChecker {
+    fun hasLocationPermission(): Boolean
+}
+
 class LocationPermissionChecker(
     context: Context
-) {
+) : DriverLocationPermissionChecker {
     private val appContext = context.applicationContext
 
-    fun hasLocationPermission(): Boolean {
+    override fun hasLocationPermission(): Boolean {
         return ContextCompat.checkSelfPermission(
             appContext,
             Manifest.permission.ACCESS_FINE_LOCATION

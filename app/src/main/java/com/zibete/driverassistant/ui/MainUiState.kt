@@ -20,6 +20,8 @@ data class MainUiState(
     val monitorLastRecognizedText: String? = null,
     val monitorErrorMessage: String? = null,
     val monitorOverlayStatus: String? = null,
+    val homeDirectionStatus: String? = null,
+    val homeDirectionText: String? = null,
     val serviceStatus: String = "Detenido",
     val lastDecision: TripDecisionResult? = null,
     val lastRealDecision: TripDecisionResult? = null,

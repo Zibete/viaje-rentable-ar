@@ -12,6 +12,7 @@ import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.zibete.driverassistant.debug.DriverAssistantDebugLogger
 import com.zibete.driverassistant.zones.AvoidZonePolicy
 import com.zibete.driverassistant.zones.AvoidZoneRule
 import kotlinx.coroutines.flow.Flow
@@ -52,6 +53,11 @@ class DataStoreDriverConfigRepository(
     override suspend fun getConfig(): DriverConfig = config.first()
 
     override suspend fun updateConfig(config: DriverConfig) {
+        DriverAssistantDebugLogger.log(
+            "home config persist",
+            "hasHomeAddress=${!config.homeAddress.isNullOrBlank()}, " +
+                "hasHomeCoordinates=${config.homeLatitude != null && config.homeLongitude != null}"
+        )
         resolvedDataStore.edit { preferences ->
             preferences.clear()
             preferences.writeConfig(config)

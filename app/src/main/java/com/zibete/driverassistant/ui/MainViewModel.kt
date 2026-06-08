@@ -150,6 +150,8 @@ class MainViewModel(
                     ?: it.monitorLastRecognizedText,
                 monitorErrorMessage = result.errorMessage,
                 monitorOverlayStatus = result.toOverlayStatusMessage(),
+                homeDirectionStatus = result.homeDirectionStatus?.name ?: it.homeDirectionStatus,
+                homeDirectionText = result.homeDirectionText ?: it.homeDirectionText,
                 ocrStatus = result.ocrStatus.toSpanishStatus(),
                 lastRecognizedText = result.recognizedText ?: it.lastRecognizedText,
                 ocrErrorMessage = result.errorMessage,

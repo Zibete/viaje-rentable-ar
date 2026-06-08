@@ -3,6 +3,7 @@ package com.zibete.driverassistant.capture
 import android.content.Intent
 import com.zibete.driverassistant.calculator.DriverDecision
 import com.zibete.driverassistant.calculator.TripDecisionResult
+import com.zibete.driverassistant.home.HomeDirectionStatus
 import com.zibete.driverassistant.ocr.OcrStatus
 
 data class ScreenCaptureMonitorResult(
@@ -11,7 +12,9 @@ data class ScreenCaptureMonitorResult(
     val ocrStatus: OcrStatus = OcrStatus.IDLE,
     val errorMessage: String? = null,
     val decisionResult: TripDecisionResult? = null,
-    val overlayUpdated: Boolean = false
+    val overlayUpdated: Boolean = false,
+    val homeDirectionStatus: HomeDirectionStatus? = null,
+    val homeDirectionText: String? = null
 ) {
     companion object {
         fun fromIntent(intent: Intent): ScreenCaptureMonitorResult {
@@ -23,6 +26,8 @@ data class ScreenCaptureMonitorResult(
                 ?: OcrStatus.IDLE
             val decision = intent.getStringExtra(ScreenCaptureMonitorService.EXTRA_DECISION)
                 ?.let { runCatching { DriverDecision.valueOf(it) }.getOrNull() }
+            val homeDirectionStatus = intent.getStringExtra(ScreenCaptureMonitorService.EXTRA_HOME_DIRECTION_STATUS)
+                ?.let { runCatching { HomeDirectionStatus.valueOf(it) }.getOrNull() }
 
             return ScreenCaptureMonitorResult(
                 status = status,
@@ -52,7 +57,9 @@ data class ScreenCaptureMonitorResult(
                 overlayUpdated = intent.getBooleanExtra(
                     ScreenCaptureMonitorService.EXTRA_OVERLAY_UPDATED,
                     false
-                )
+                ),
+                homeDirectionStatus = homeDirectionStatus,
+                homeDirectionText = intent.getStringExtra(ScreenCaptureMonitorService.EXTRA_HOME_DIRECTION_TEXT)
             )
         }
 

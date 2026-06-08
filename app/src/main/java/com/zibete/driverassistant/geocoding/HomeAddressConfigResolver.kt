@@ -1,6 +1,7 @@
 package com.zibete.driverassistant.geocoding
 
 import com.zibete.driverassistant.config.DriverConfig
+import com.zibete.driverassistant.debug.DriverAssistantDebugLogger
 
 class HomeAddressConfigResolver(
     private val geocodingRepository: GeocodingRepository,
@@ -9,6 +10,11 @@ class HomeAddressConfigResolver(
 ) {
     suspend fun resolveIfNeeded(config: DriverConfig): HomeAddressConfigResolution {
         val address = config.homeAddress?.trim()
+        DriverAssistantDebugLogger.log(
+            "home config resolve inputs",
+            "hasHomeAddress=${!address.isNullOrBlank()}, " +
+                "hasHomeCoordinates=${config.homeLatitude != null && config.homeLongitude != null}"
+        )
         if (address.isNullOrBlank()) {
             return HomeAddressConfigResolution(
                 config = config.copy(
@@ -20,7 +26,7 @@ class HomeAddressConfigResolver(
                     homeGeocodingProvider = null
                 ),
                 status = HomeAddressConfigResolutionStatus.NO_ADDRESS
-            )
+            ).also { resolution -> logResolution(resolution) }
         }
 
         val latitude = config.homeLatitude
@@ -29,10 +35,14 @@ class HomeAddressConfigResolver(
             return HomeAddressConfigResolution(
                 config = config,
                 status = HomeAddressConfigResolutionStatus.ALREADY_RESOLVED
-            )
+            ).also { resolution -> logResolution(resolution) }
         }
 
         val result = geocodingRepository.geocode(address)
+        DriverAssistantDebugLogger.log(
+            "home config geocoding",
+            "status=${result.status}, hasCoordinates=${result.hasValidCoordinates}, confidence=${result.confidence}"
+        )
         if (!result.isResolved || (result.confidence ?: 0.0) < minimumConfidence) {
             return HomeAddressConfigResolution(
                 config = config.copy(
@@ -43,7 +53,7 @@ class HomeAddressConfigResolver(
                     homeGeocodingProvider = null
                 ),
                 status = HomeAddressConfigResolutionStatus.NOT_RESOLVED
-            )
+            ).also { resolution -> logResolution(resolution) }
         }
 
         return HomeAddressConfigResolution(
@@ -56,6 +66,14 @@ class HomeAddressConfigResolver(
                 homeGeocodingProvider = "android-geocoder"
             ),
             status = HomeAddressConfigResolutionStatus.RESOLVED
+        ).also { resolution -> logResolution(resolution) }
+    }
+
+    private fun logResolution(resolution: HomeAddressConfigResolution) {
+        DriverAssistantDebugLogger.log(
+            "home config resolve result",
+            "status=${resolution.status}, hasHomeCoordinates=" +
+                "${resolution.config.homeLatitude != null && resolution.config.homeLongitude != null}"
         )
     }
 }
