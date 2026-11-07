@@ -423,7 +423,7 @@ MIT — ver [LICENSE](LICENSE)
 **Matías Abel Peralta**
 
 [![GitHub](https://img.shields.io/badge/GitHub-Zibete-181717?logo=github&logoColor=white)](https://github.com/Zibete)
-[![LinkedIn](https://img.shields.io/badge/LinkedIn-Matías%20Abel%20Peralta-0077B5?logo=linkedin&logoColor=white)](https://www.linkedin.com/in/mat%C3%ADasabelperalta/)
+[![LinkedIn](https://img.shields.io/badge/LinkedIn-Matías%20Abel%20Peralta-0077B5?logo=linkedin&logoColor=white)](https://www.linkedin.com/in/matiasabelperalta/)
 
 ---
 
